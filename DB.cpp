@@ -6,16 +6,21 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <vector>
 
 /***********************************************************************************************
 * DB.cpp: class handles all SQL and message/error logging interactions                         *
 *                                                                                              *
-* Version: 0.1                                                                                 *
-* Last updated 07/07/2026 08:30                                                                *
+* Version: 0.2                                                                                 *
+* Last updated 08/07/2026 09:03                                                                *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
 DB::DB() { };
+
+void DB::begin() {
+    mysql_library_init(0, NULL, NULL);
+}
 
 bool DB::openConnection() {
     char errBuf[ERR_LEN];
@@ -92,105 +97,94 @@ bool DB::openConnection() {
         std::string p = _prefs[prefName];
         return std::stof(p);
     }
-    /*
-    @classmethod
-    def addMessageEntry(cls, src : str, txt : str, isErr: bool) -> bool:
-        '''
-        addMessageEntry(): method to add a log message to today's Message or Error Log file
+
+    std::string DB::dtString(std::string fString) {
+        auto t = std::time(NULL);
+        auto tm = *std::gmtime(&t);
+        std::ostringstream oss;
+        oss << std::put_time(&tm, fString.c_str());
+        auto sTime = oss.str();
+    }
+    
+    bool DB::addMessageEntry(std::string txt, bool isErr) {
+        /*addMessageEntry(): method to add a log message to today's Message or Error Log file
         parameters:
-            cls: this class object
-            src: char : R(sourceESP) or S: message source(roof or shed)
             txt: string: message text (< 80 characters)
             isErr: bool: True if error message
         returns: bool: True if successful otherwise False
-        '''
-        dtToday = datetime.today()
-        sNow = datetime.now(timezone.utc).strftime("%H:%M:%S: ")
-        cwd = os.path.dirname(os.path.realpath(__file__))
-        if isErr:
-            ff = "ER"
-        else:
-            ff = "MS"
-        fName = cwd + "/Logs/" + ff + dtToday.strftime("%Y-%b-%d.log")
-        try:
-            f = open(fName, "a")
-            line = sNow + txt + '\n'
-            f.write(line)
-            f.close()
-            return True
-        except Exception as ex:
-            f.close()
-            return False
-*/
+        */
+        auto sTime = dtString("%H:%M:%S");
+        auto sDate = dtString("%Y-%b-%d.log");
+
+        std::string ff;
+        if (isErr) ff = "ER";
+        else ff = "MS";
+        std::string fName = "./Logs/" + ff + sDate;
+        std::ofstream log(fName, std::ios_base::app | std::ios_base::out);
+        log << txt << std::endl;
+        return true;
+    }
+
     bool DB::updateLiveRow(std::string itemNm, int intvl, float itemVal) {
         /*updateLiveRow(): method to update one item in LiveValues table
         parameters:
             itemNm: 2-character code name for item
+            intvl: interval since last measurement
             itemVal: int: new value for item
-        returns: bool: True if successful, otherwise False
+        returns: bool: true if successful, otherwise false
         */
         bool bOK = openConnection();
+        if (!bOK) return false;
         std::string query;
-        auto t = std::time(nullptr);
-        auto tm = *std::localtime(&t);
-        std::ostringstream oss;
-        oss << std::put_time(&tm, "'%Y-%m-%d %H:%M:%S'");
-        auto sTime = oss.str();
+        auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
         query = "UPDATE LiveValues SET Intvl = " + std::to_string(intvl) + ", Val = " + std::to_string(itemVal) + ", LastUpdated = " + sTime + " WHERE ItemName = '" + itemNm + "'";
         std::cout << query << std::endl;
         int status = mysql_query(myConn, query.c_str());
         std::cout << "SQL status: " << status << std::endl;
         return (status == 0);            
     }
-/*       
-    @classmethod
-    def updateLiveWD(cls, a: list) -> bool:
-        '''
-        updateLiveWD(): method to update all 17 rows in WDLive table
+       
+    bool DB::updateLiveWD(int intvl, std::vector<int> counts) {
+        /*updateLiveWD(): method to update all 17 rows in WDLive table
         parameters:
-            cls: this class object
-            a: array of 17 integers (16 compass points plus dustbin)
-        returns: bool: True if successful, otherwise False
-        '''
-        db = MySQLdb.connect(host="localhost", user=user_id, password=passwd, db=dbase)
-        c = db.cursor()
-        try:
-            i = 1
-            for row in a:
-                sql = "UPDATE WDLive SET WDCount = " + str(row) + " WHERE PK = " + str(i)
-                c.execute(sql)
-                i += 1
-                db.commit()
-            c.close()
-            return True
-        except Exception as ex:
-            cls.errMsg = str(ex)
-            db.rollback()
-            return False
+            int: interval in ms since last update
+            counts: array of 17 integers (16 compass points plus dustbin)
+        returns: bool: true if successful, otherwise false
+        */
+        int i, numPts = (int)getPrefFloat("CmpsPnts");
+        bool bOK = openConnection();
+        if (!bOK) return false;
 
-    @classmethod
-    def addNowRow(cls, row : tuple) -> bool:
-        '''
-        addNowRow(): method to add a new row to NowValues table
+        std::string query;
+        auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
+        for (i = 0; i <= numPts; i++) {
+            query = "UPDATE WDLive SET WDCount = " + std::to_string(counts[i]) + " WHERE PK = " + std::to_string(i + 1); // PK is 1-based!
+            int status = mysql_query(myConn, query.c_str());
+            if (status != 0) return false;
+        }
+        return true;
+    }
+    
+    bool DB::addNowRow(float* row) {
+        /*addNowRow(): method to add a new row to NowValues table
         parameters:
-            cls: this class object
-            row: tuple of 8 values
+            row: array of 8 float values
         returns: bool: True if successful, otherwise False
-        '''
-        db = MySQLdb.connect(host="localhost", user=user_id, password=passwd, db=dbase)
-        c = db.cursor()
-        sql = "INSERT INTO NowValues(dtNow, Rain, Gust, Humdty, Light, Pressure, WSpeed, Temp) "
-        sql += "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-        try:
-            c.execute(sql, row)
-            db.commit()
-            c.close()
-            return True
-        except Exception as ex:
-            cls.errMsg = str(ex)
-            db.rollback()
-            return False
-
+        */
+        bool bOK = openConnection();
+        if (!bOK) return false;
+        std::string query;
+        std::string sDT = dtString("'%Y-%m-%d %H:%M:%S'");
+        query = "INSERT INTO NowValues(dtNow, Rain, Gust, Humdty, Light, Pressure, WSpeed, Temp) VALUES (" + sDT;
+        int i;
+        for (i = 0; i < NUM_NOW; i++) {
+            query += ", " + std::to_string(row[i]);
+        }
+        query += ")";
+        // MODIFY FROM HERE.....
+        return true;
+}
+/*
     @classmethod
     def addWDRow(cls, row : tuple, bHour: bool) -> bool:
         '''

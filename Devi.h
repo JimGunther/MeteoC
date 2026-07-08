@@ -1,19 +1,22 @@
 /* 
 Devi.h: manages all device-handling code
-Version of 06/07/2026
+Version of 07/07/2026
 Written by Jim Gunther
 */
 #ifndef DEVI_H
 #define DEVI_H
 
+#include <vector>
 #include "Sensors.h"
 #include "DB.h"
 
 #define BH1750_ADDR_A 0x23
 #define BH1750_ADDR_B 0x5c
+#define PCF8574_ADDR 0x27
+#define PCF8574_BASE 0x80
 #define ANEM_LOOPS 60
 #define VANE_LOOPS 150
-#define DEB_MARGIN 5 // milliseconds
+#define DEBNCE_MARGIN 5 // milliseconds
 #define ANEM_PIN 23
 #define GUSTPOLL_COUNT 12
 
@@ -39,7 +42,12 @@ class Devi {
         int _maxGust;
         int _prevWSRevs;
         unsigned long _prevAnemMillis;
+        unsigned long _prevSensMillis;
         int _vaneCount;
+        int _vaneID;
+        std::vector<int> _dirCounts;
+        int _numCmpPts;
+        unsigned long _prevVaneMillis;
 
 };
 #endif
