@@ -1,6 +1,8 @@
 #include <stdio.h>
+#include <iostream>
 #include <wiringPi.h>
 #include <wiringPiI2C.h>
+#include <wiringShift.h>
 #include <unistd.h>
 #include <errno.h>
 #include <stdint.h>
@@ -31,7 +33,8 @@ bool BH1750::begin(int addr) {
 float BH1750::getLux() {
   float final_lux;  
   // Read 16-bit data
-  int data = wiringPiI2CReadReg16(_fd, _addr);
+  int data = wiringPiI2CReadReg16(_fd, 0);
+  //std::cout << "Lux raw data:" << data << std::endl;
     if (data != -1) {
       // BH1750 registers are LSB and MSB swapped
       int lux = ((data >> 8) & 0x00FF) | ((data << 8) & 0xFF00);
@@ -40,7 +43,7 @@ float BH1750::getLux() {
       final_lux = lux / 1.2;
     }
     else {
-      printf("Read error\n");
+      printf("Lux read error\n");
       return -1.0;
     }
     sleep(1);
@@ -196,4 +199,62 @@ void BME280::getRawData(int fd, bme280_raw_data *raw) {
   raw->humidity = 0;
   raw->humidity = (raw->humidity | raw->hmsb) << 8;
   raw->humidity = (raw->humidity | raw->hlsb);
+}
+
+//============================================================================================
+
+HX711::HX711() {
+  _clockPin  = RN_CLOCK_PIN;
+  _outPin  = RN_DATA_PIN;
+  _gain = std::byte{1};
+  _pinsConfigured = false;
+}
+
+HX711::~HX711() {
+}
+
+bool HX711::readyToSend() {
+  if (!_pinsConfigured) {
+    // We need to set the pin mode once, but not in the constructor
+    pinMode(_clockPin, OUTPUT);
+    pinMode(_outPin, INPUT);
+    _pinsConfigured = true;
+  }
+  return digitalRead(_outPin) == LOW;
+}
+
+void HX711::setGain(int gain) {
+  switch (gain) {
+    case 128:
+      _gain = std::byte{1};
+      break;
+    case 64:
+      _gain = std::byte{3};
+      break;
+    case 32:
+      _gain = std::byte{2};
+      break;
+  }
+
+  digitalWrite(_clockPin, LOW);
+  read();
+}
+
+long HX711::read() {
+   while (!readyToSend());
+
+  std::byte data[3];
+
+  for (int j = 3; j--;) {
+      data[j] = std::byte{shiftIn(_outPin,_clockPin, MSBFIRST)};
+  }
+
+  // set gain
+  for (int i = 0; i < (int)_gain; i++) {
+    digitalWrite(_clockPin, HIGH);
+    digitalWrite(_clockPin, LOW);
+  }
+
+  data[2] = std::byte((int)data[2] ^ 0x80);
+  return ((uint32_t) data[2] << 16) | ((uint32_t) data[1] << 8) | (uint32_t) data[0];
 }

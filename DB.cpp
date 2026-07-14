@@ -11,8 +11,8 @@
 /***********************************************************************************************
 * DB.cpp: class handles all SQL and message/error logging interactions                         *
 *                                                                                              *
-* Version: 0.2                                                                                 *
-* Last updated 08/07/2026 09:03                                                                *
+* Version: 0.3                                                                                 *
+* Last updated 14/07/2026 17:02                                                                *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -24,47 +24,16 @@ void DB::begin() {
 
 bool DB::openConnection() {
     char errBuf[ERR_LEN];
-    myConn = mysql_init(NULL);
-    if ( mysql_real_connect( myConn, "localhost", _userid.c_str(), _passwd.c_str(), _dbName.c_str(), 0, NULL, 0 ) == NULL)
+    _myConn = mysql_init(NULL);
+    if ( mysql_real_connect( _myConn, "localhost", _userid.c_str(), _passwd.c_str(), _dbName.c_str(), 0, NULL, 0 ) == NULL)
         {
-		    sprintf( errBuf, "SQL Connect Failed : %i", mysql_error(myConn) );
-		    //logError(errBuf);
+		    sprintf( errBuf, "SQL Connect Failed : %i", mysql_error(_myConn) );
+		    _errMsg = "Open connection failed.";
+            mysql_close(_myConn);
             return false;
         }
         return true;
     }
-/*
-
-// Reusable helper methods: ALL NEEDED?
-    
-    @classmethod
-    def changeData(cls, sql : str) -> bool:
-        db, curs = cls.openDB(sql)
-        b = True
-        try:
-            db.commit()
-        except Exception as ex:
-            cls.errMsg = str(ex)
-            print (cls.errMsg)
-            db.rollback()
-            b = False
-        db.close()
-        return b
-
-    @classmethod
-    def fetchOne(cls, sql: str) -> tuple | None:
-        db, curs = cls.openDB(sql)
-        result = curs.fetchone()
-        db.close()
-        return result
-
-    @classmethod
-    def fetchAll(cls, sql : str) -> list | None:
-        db, curs = cls.openDB(sql)
-        results = curs.fetchall()
-        db.close()
-        return results
-    */
 
     bool DB::readPrefs() {
         /*readPrefs(): method to read Prefs data table: note this must be caalled before any other methods in this class (to read .env variables)
@@ -84,6 +53,7 @@ bool DB::openConnection() {
             len = fVal.length();
             fVal = fVal.substr(0, len - 1);
             _prefs[fKey] = fVal;
+            //std::cout << "K:V:" << fKey << ":" << fVal << std::endl;
         }
         f.close();
         _userid = _prefs["DB_USER"];
@@ -104,6 +74,7 @@ bool DB::openConnection() {
         std::ostringstream oss;
         oss << std::put_time(&tm, fString.c_str());
         auto sTime = oss.str();
+        return sTime;
     }
     
     bool DB::addMessageEntry(std::string txt, bool isErr) {
@@ -138,9 +109,13 @@ bool DB::openConnection() {
         std::string query;
         auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
         query = "UPDATE LiveValues SET Intvl = " + std::to_string(intvl) + ", Val = " + std::to_string(itemVal) + ", LastUpdated = " + sTime + " WHERE ItemName = '" + itemNm + "'";
-        std::cout << query << std::endl;
-        int status = mysql_query(myConn, query.c_str());
-        std::cout << "SQL status: " << status << std::endl;
+        //std::cout << query << std::endl;
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            std::string s(mysql_error(_myConn));
+            _errMsg = s;
+        }
+        mysql_close(_myConn);
         return (status == 0);            
     }
        
@@ -159,13 +134,19 @@ bool DB::openConnection() {
         auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
         for (i = 0; i <= numPts; i++) {
             query = "UPDATE WDLive SET WDCount = " + std::to_string(counts[i]) + " WHERE PK = " + std::to_string(i + 1); // PK is 1-based!
-            int status = mysql_query(myConn, query.c_str());
-            if (status != 0) return false;
+            int status = mysql_query(_myConn, query.c_str());
+            if (status != 0) {
+                std::string s(mysql_error(_myConn));
+                _errMsg = s;
+                mysql_close(_myConn);
+                return false;
+            }
         }
+        mysql_close(_myConn);
         return true;
     }
     
-    bool DB::addNowRow(float* row) {
+    bool DB::addNowRow(std::vector<float> row) {
         /*addNowRow(): method to add a new row to NowValues table
         parameters:
             row: array of 8 float values
@@ -173,159 +154,195 @@ bool DB::openConnection() {
         */
         bool bOK = openConnection();
         if (!bOK) return false;
+
         std::string query;
         std::string sDT = dtString("'%Y-%m-%d %H:%M:%S'");
-        query = "INSERT INTO NowValues(dtNow, Rain, Gust, Humdty, Light, Pressure, WSpeed, Temp) VALUES (" + sDT;
+        query = "INSERT INTO NowValues(dtNow, Rain, WSpeed, Gust, Temp, Humdty, Pressure, Light) VALUES (" + sDT;
         int i;
         for (i = 0; i < NUM_NOW; i++) {
             query += ", " + std::to_string(row[i]);
         }
         query += ")";
-        // MODIFY FROM HERE.....
+        std::cout << query << std::endl;
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            std::string s(mysql_error(_myConn));
+            _errMsg = s;
+            mysql_close(_myConn);
+            return false;
+        }
+        mysql_close(_myConn);
         return true;
 }
-/*
-    @classmethod
-    def addWDRow(cls, row : tuple, bHour: bool) -> bool:
-        '''
-        addWDRow(): method to add a new row to WDNow table
+
+    bool DB::addWDRow(std::vector<int> row, bool bHour) {
+        /*addWDRow(): method to add a new row to WDNow table
         parameters:
-            cls: this class object
-            row: tuple of 17 values
+            row: vector of 17 values
             bHour: True if adding to WDHour table, False if WDNow table
         returns: bool: True if successful, otherwise False
-        '''
-        db = MySQLdb.connect(host="localhost", user=user_id, password=passwd, db=dbase)
-        c = db.cursor()
-        if bHour:
-            strIns = "Hour (dtWD"
-        else:
-            strIns = "Now (dtWDNow"
-        sql = "INSERT INTO WD" + strIns + ", N, NNW, NW, WNW, W, WSW, SW, SSW, S, SSE, SE, ESE, E, ENE, NE, NNE, INV) "
-        sql += "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-        try:
-            c.execute(sql, row)
-            db.commit()
-            c.close()
-            return True
-        except Exception as ex:
-            cls.errMsg = str(ex)
-            print (cls.errMsg)
-            db.rollback()
-            return False
+        */
+        bool bOK = openConnection();
+        if (!bOK) return false;
+        std::string strIns;
+        if (bHour) strIns = "Hour (dtWD";
+        else strIns = "Now (dtWDNow";
+        auto sDT = dtString("'%Y-%m-%d %H:%M:%S'");
+        std::string query;
+        query = "INSERT INTO WD" + strIns + ", N, NNW, NW, WNW, W, WSW, SW, SSW, S, SSE, SE, ESE, E, ENE, NE, NNE, INV) VALUES (" + sDT;
+        int i, numPts = (int)getPrefFloat("CmpsPnts");
+        for (i = 0; i <= numPts; i++) {
+            query += ", " + std::to_string(row[i]);
+        }
+        query += ")";
+        std::cout << query << std::endl;
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            std::string s(mysql_error(_myConn));
+            _errMsg = s;
+            mysql_close(_myConn);
+            return false;
+        }
+        mysql_close(_myConn);
+        return true;
+    }
 
-    @classmethod
-    def hourAggregates(cls) -> tuple:
-        '''hourAggregates(): gets hourly aggregates for rain wind, gust from now table
-        parameters:
-            cls: this class object
-        returns: tuple of results
-        '''
-        sql = "SELECT MAX(Rain) AS MaxRain, AVG(WSpeed) AS AveWSpeed, MAX(Gust) AS MaxGust FROM NowValues WHERE dtNow > DATE_SUB(CONCAT(UTC_DATE(), ' ', UTC_TIME()), INTERVAL 1 HOUR)"
-        result = cls.fetchOne(sql)
-        if result is None:
-            return (0, 0, 0)
-        return result   # if all values are zero, result will be (0, 0, 0)
-    
-    @classmethod
-    def hourWDAggs(cls) -> tuple:
-        '''hourWDAggs(): gets hourly aggregates for Wind direction
-        parameters:
-            cls: this class object
-        returns: tuple of 17 results
-        '''
-        sql = "SELECT SUM(N) AS hrN, SUM(NNW) AS hrNNW, SUM(NW) AS hrNW, SUM(WNW) AS hrWNW, SUM(W) AS hrW, SUM(WSW) AS hrWSW, SUM(SW) AS hrSW, SUM(SSW) AS hrSSW, SUM(S) AS hrS, "
-        sql += "SUM(SSE) AS hrSSE, SUM(SE) AS hrSE, SUM(ESE) AS hrESE, SUM(E) AS hrE, SUM(ENE) AS hrENE, SUM(NE) AS hrNE, SUM(NNE) AS hrNNE, SUM(INV) AS hrINV FROM WDNow "
-        sql += "WHERE dtWDNow > DATE_SUB(CONCAT(UTC_DATE(), ' ', UTC_TIME()), INTERVAL 1 HOUR)"
-        result = cls.fetchOne(sql)
-        if result is None:
-            return (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0)
-        return result
-    
-    @classmethod
-    def addHourRow(cls, row) -> bool:
-        '''
-        addHourRow(): adds a row to the HrValues table
-        parameters:
-            cls: this class object
-            row: tuple of values in format:for entering into SQL as args
-        returns: bool: True if successful, otherwise False
-        '''
-        global errMsg
-        try:
-            db = MySQLdb.connect(host="localhost", user=user_id, password=passwd, db=dbase)
-            c = db.cursor()
-            sql = "INSERT INTO HrValues(dtHr, RainHr, WSpeedHr, GustHr, Temp, Humdty, Pressure, Light) "
-            sql += "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
-            c.execute(sql, row)
-            db.commit()
-            rv = True
-        except MySQLdb.Error as ex:
-            errMsg = str(ex)
-            print (cls.errMsg)
-            db.rollback()
-            rv = False
-        c. close()
-        db.close()
-        return rv
+    std::vector<float> DB::hourAggregates() {
+        /*hourAggregates(): gets hourly aggregates for rain wind, gust from now table
+        parameters: none
+        returns: vector of 3 doubles
+        */
+        bool bOK = openConnection();
+        if (!bOK) return std::vector<float> {0.0, 0.0, 0.0};
+        std::string query = "SELECT MAX(Rain) AS MaxRain, AVG(WSpeed) AS AveWSpeed, MAX(Gust) AS MaxGust FROM NowValues WHERE dtNow > DATE_SUB(CONCAT(UTC_DATE(), ' ', UTC_TIME()), INTERVAL 1 HOUR)";
+        std::cout << query << std::endl;
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            mysql_close(_myConn);
+            return std::vector<float> {0.0, 0.0, 0.0};
+        }
+        MYSQL_RES* result = mysql_use_result(_myConn);
+        MYSQL_ROW row = mysql_fetch_row(result);
+        mysql_free_result(result);
+        mysql_close(_myConn);
 
-    @classmethod
-    def addDayRow(cls, dtNow : datetime, risefall : int) -> bool:
-        '''
+        if (result == NULL) return std::vector<float> {0.0, 0.0, 0.0};
+        std::vector<float> rv = {(float)atof(row[0]), (float)atof(row[1]), (float)atof(row[2])}; 
+        return rv; 
+    }
+    
+    std::vector<int> DB::hourWDAggs() {
+        /*hourWDAggs(): gets hourly aggregates for Wind direction
+        parameters: none
+            cls: this class object
+        returns: vector of 17 results
+        */
+        bool bOK = openConnection();
+        if (!bOK) return std::vector<int> {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        std::string query = "SELECT SUM(N) AS hrN, SUM(NNW) AS hrNNW, SUM(NW) AS hrNW, SUM(WNW) AS hrWNW, SUM(W) AS hrW, SUM(WSW) AS hrWSW, SUM(SW) AS hrSW, SUM(SSW) AS hrSSW, SUM(S) AS hrS, ";
+        query += "SUM(SSE) AS hrSSE, SUM(SE) AS hrSE, SUM(ESE) AS hrESE, SUM(E) AS hrE, SUM(ENE) AS hrENE, SUM(NE) AS hrNE, SUM(NNE) AS hrNNE, SUM(INV) AS hrINV FROM WDNow ";
+        query += "WHERE dtWDNow > DATE_SUB(CONCAT(UTC_DATE(), ' ', UTC_TIME()), INTERVAL 1 HOUR)";
+        std::cout << query << std::endl;
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) return std::vector<int> {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        MYSQL_RES* result = mysql_use_result(_myConn);
+        MYSQL_ROW row = mysql_fetch_row(result);
+        mysql_free_result(result);
+        mysql_close(_myConn);
+        if (result == NULL) return std::vector<int> {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        std::vector<int> rv;
+        int i;
+        for (i = 0; i < 17; i++) {
+             rv[i] = atoi(row[i]); 
+        }
+        return rv;
+}
+    
+    bool DB::addHourRow(std::vector<float> row) {
+        /*addHourRow(): adds a row to the HrValues table
+        parameters:
+            row: vector of 7 float values
+        returns: bool: true if successful, otherwise False
+        */
+        bool bOK = openConnection();
+        if (!bOK) return false;
+        auto sDT = dtString("'%Y-%m-%d %H:%M:00'");
+        std::string query = "INSERT INTO HrValues(dtHr, RainHr, WSpeedHr, GustHr, Temp, Humdty, Pressure, Light) Values(" + sDT;
+        int i;
+        for (i = 0; i < NUM_NOW; i++) {
+            query += ", " + std::to_string(row[i]);
+        }
+        query += ")";
+        std::cout << query << std::endl;
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+           std::string s(mysql_error(_myConn));
+           _errMsg = s;
+           mysql_close(_myConn);
+            return false;
+        }
+        mysql_close(_myConn);
+        return true;
+    }
+
+    bool DB::addDayRow(int risefall) {
+        /*
         addDayRow(): adds a row to the DayValues table
         parameters:
-            cls: this class object
-            dtNow: datetime: time now (midnight)
             risefall: int: -1, 0, or +1 (fall, steady, rise)
-        returns: bool: True if successful, False otherwise
-        '''
-        db = MySQLdb.connect(host="localhost", user=user_id, password=passwd, db=dbase)
-        c = db.cursor()
-        try:
-            args = (dtNow, risefall)
-            print("DT: " + str(dtNow))
-            c.callproc("spHourToDay", args)
-            db.commit()
-            print("Day added!")
-            c.close()
-            db.close()
-            return True
-        except Exception as ex:
-            cls.errMsg = str(ex)
-            db.rollback()
-            print("Day add error")
-            c.close()
-            db.close()
-            return False
-
-    @classmethod
-    def getHrPressures(cls) -> list | None:
-        '''
-        getHrPressures(): method to get 24 (or less) hourly pressure results
-        parameters:
-            cls: this class object
+        returns: bool: true if successful, false otherwise
+        '*/
+        bool bOK = openConnection();
+        if (!bOK) return false;
+        auto sDT = dtString("'%Y-%m-%d 00:00:00', '");
+        std::string query = "CALL spHourToDay(" + sDT + std::to_string(risefall) + ")";
+        std::cout << query << std::endl;
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            std::string s(mysql_error(_myConn));
+            _errMsg = s;
+            mysql_close(_myConn);
+            return false;
+        }
+        mysql_close(_myConn);
+        return true;
+    }
+    
+    std::vector<hr_pressure> DB::getHrPressures() {
+        /*getHrPressures(): method to get 24 (or less) hourly pressure results
+        parameters: none
         returns: list of tuples (hour, pressure)
-        '''
-        db = MySQLdb.connect(host="localhost", user=user_id, password=passwd, db=dbase)
-        c = db.cursor()
-        try:
-            sql = "SELECT HOUR(dtHr) AS hr, Pressure FROM HrValues WHERE dtHr > %s"
-            dtYest = datetime.now(timezone.utc) - timedelta(hours=24)
-            args = (dtYest, )
-            c.execute(sql, args)
-            res = c.fetchall()
-        except Exception as ex:
-            cls.errMsg = str(ex)
-            res = None
-        c.close()
-        db.close()
-        if res is None:
-            return None
-        else:
-            return list(res)
-        
-    @classmethod
-    def getError(cls) -> str:
-        return cls.errMsg
-
-*/
+        */
+        bool bOK = openConnection();
+        if (!bOK) return std::vector<hr_pressure> {};
+        std::string fString = "'%Y-%m-%d 00:00:00'";
+        time_t t = std::time(NULL) - 24*60*60;  // t is 24 hours ago
+        auto tm = *std::gmtime(&t);
+        std::ostringstream oss;
+        oss << std::put_time(&tm, fString.c_str());
+        std::string sYest = oss.str();
+        std::string query = "SELECT HOUR(dtHr) AS hr, Pressure FROM HrValues WHERE dtHr > " + sYest;
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            mysql_close(_myConn);
+            return std::vector<hr_pressure> {};
+        }
+        MYSQL_RES* result = mysql_use_result(_myConn);
+        if (result == NULL) {
+            mysql_close(_myConn);
+            return std::vector<hr_pressure> {};
+        }
+        MYSQL_ROW row;
+        hr_pressure hp;
+        std::vector<hr_pressure> rv = {};
+        while ((row = mysql_fetch_row(result))) {
+            hp.hour = atoi(row[0]);
+            hp.press = atoi(row[1]);
+            rv.push_back(hp);
+        }
+        mysql_free_result(result);
+        mysql_close(_myConn);
+        return rv;
+    }
+    
+    std::string DB::error() { return _errMsg; }

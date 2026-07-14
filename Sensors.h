@@ -1,6 +1,11 @@
 #ifndef SENSORS_H
 #define SENSORS_H
 #include <stdint.h>
+/****************************************************************************************************
+ * Sensors.h: header file for sensors BH1750 (light), BME280 (temp,hum,press) and HX711 (rain weight)
+ * Version of 14/07/2026
+ * Written by Jim Gunther
+ ***************************************************************************************************/
 
 
 // Definition for BH1750
@@ -40,6 +45,11 @@
 #define BME280_REGISTER_HUMIDDATA     0xFD
 
 #define MEAN_SEA_LEVEL_PRESSURE       1013
+
+#define MSBFIRST 1
+#define RN_DATA_PIN 5 
+#define RN_CLOCK_PIN 6
+#define HX711_RATIO 1.0 // NB: CHANGE THIS: HX711 needs calibrating to milligrams!
 
 /*
 * Immutable calibration data read from bme280
@@ -133,5 +143,24 @@ class BME280
     void getRawData(int fd, bme280_raw_data *raw);    
 
 };
+
+//__________________________________________________________________________________________
+
+class HX711
+{
+  private:
+    int _clockPin;
+    int _outPin;
+    std::byte _gain;
+    bool _pinsConfigured;
+
+  public:
+    HX711();
+    virtual ~HX711();
+    bool readyToSend();
+    void setGain(int gain = 128);
+    long read();
+};
+
 
 #endif /* SENSORS_H*/
