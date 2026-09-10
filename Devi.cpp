@@ -1,13 +1,15 @@
 #include <iostream>
 #include <chrono>
+#include <thread>
 #include <wiringPi.h>
 #include <wiringPiI2C.h>
+#include <wiringSerial.h>
 #include <pcf8574.h>
 #include "Devi.h"
 #include "Sensors.h"
 /*********************************************************************************************************
  * Devi class implementation file
- * Version of 14/07/2026
+ * Version of 09/09/2026 20:29
  * Written by Jim Gunther
 **********************************************************************************************************/
 volatile int isrRevs;
@@ -25,12 +27,12 @@ void anemISR() {
 Devi::Devi() {
     _deviStatus = 0;
     _anemCount = 1;
-    _rainCount = 1;
-    _rainTare = 0.0;
+    //_rainCount = 1;
+    //_rainTare = 0.0;
     _vaneCount = 1;
     _bHXWorking = false;
 }
-
+/*
 double Devi::aveRainWeight() {
     int i, count = 0, lng = _rainWeights.size();
     double val = 0.0;
@@ -41,6 +43,7 @@ double Devi::aveRainWeight() {
     if (count == 0) return 0.0;
     else return val / count;
 }
+*/
 
 unsigned int Devi::setupDevices(DB dBase) {
     int i;
@@ -68,23 +71,10 @@ unsigned int Devi::setupDevices(DB dBase) {
     std::cout << "Anemometer setup completed." << std::endl;
 
     // Rain setup_____________________________________________________________________________________
-    double sw = 0.0;
-    _bHXWorking = _hx.readyToSend(); // CURRENTLY I ASSUME THIS WILL BE TRUE IF OK BECAUSE >400ms SINCE POWER UP
-    if (_bHXWorking) {
-        for (i = 0; i < RAIN_DEQ_LEN; i++) {
-            rw = _hx.read() * HX711_RATIO; // HX711_RATIO is the "magic number" that converts sensor read() units to grams: TO BE CALIBRATED
-            sw += rw;
-        }
-        _rainTare = sw / RAIN_DEQ_LEN; // in grams: START WEIGHT: ASSUMED EMPTY!
-        _deviStatus += RAIN_STATUS;
-    }
-    _prevRainWeight = 0.0;
-    _rainBank = 0.0;
-    _bEmptying = false;
-    double _rainFull = (double)_db.getPrefFloat("RainFull");
-    float _rainRatio = _db.getPrefFloat("RainRatio"); // rain ratio converts grams weight to mm rain
-    _prevRainMillis = millis();
-    if (_bHXWorking) std::cout << "Rain gauge setup completed." << std::endl;
+	_rainFD = serialOpen("/dev/ttyAMA10", 115200); // NAME OF DEVICE UNCERTAIN!!
+    /*REPLACE WITH "SERIAL" SETUP*/
+	std::cout << "_rainFD: " << _rainFD << std::endl;
+    if (_rainFD >= 0) std::cout << "Rain gauge setup completed." << std::endl;
     else std::cout << "Rain gauge setup bypassed." << std::endl;
 
     // Sensors setup__________________________________________________________________________________
@@ -106,7 +96,7 @@ unsigned int Devi::setupDevices(DB dBase) {
         pinMode(PCF8574_BASE + i, INPUT);
         digitalWrite(PCF8574_BASE + i, HIGH); // enables internal pullup
     }
-    std::cout << "VaneID:" << _vaneID << std::endl;
+    //std::cout << "VaneID:" << _vaneID << std::endl;
     b = b && (_vaneID > 0);
     float fcp = _db.getPrefFloat("CmpsPnts");
     _numCmpPts = (int)fcp;   // initiate direction counts vector
@@ -177,30 +167,16 @@ void Devi::anemTasks() { // called every 250ms
         _prevAnemMillis = millisNow;
         _db.updateLiveRow("Rv", intvl, ws);
         _vals["Rv"] = ws;
-        std::cout << "AE>" << std::endl;
+        std::cout << "AE>";
     }
     _anemCount = (_anemCount + 1) % ANEM_LOOPS;
 }
 
 // RAIN "LOOP" METHODS================================================================================================
 
-void Devi::startEmptying(double weight_g) {
-    _bEmptying = true;
-    _startEmpWeight = weight_g;
-    // Take the necessary steps to start emptying the rain bucket (servo or valve)
-    // ADD CODE
-}
-
-void Devi::stopEmptying(double weight_g) {
-    // Take the necessary steps to stop emptying the rain bucket (servo or valve)
-    // ADD CODE
-    _rainBank += _startEmpWeight - weight_g;
-    _rainTare = weight_g;
-    _bEmptying = false;
-}
-
 void Devi::rainTasks() { // called every second
-    int intvl;
+/*    REPLACE BELOW
+	int intvl;
     unsigned long nowMillis;
     // First update deque (list) of rain weight readings
     double one_rain_g = 0.0;//_hx.read() * HX711_RATIO; TEMP REM
@@ -229,9 +205,9 @@ void Devi::rainTasks() { // called every second
                 std::cout << "'";
             }
         }
-        std::cout << "RE>" << std::endl;
+        std::cout << "RE>";
     }
-    _rainCount = (_rainCount + 1) % RAIN_LOOPS;
+    _rainCount = (_rainCount + 1) % RAIN_LOOPS;*/
 }
 
 // SENSOR "LOOP" METHODS===========================================================================================
@@ -252,15 +228,14 @@ void Devi::sensTasks() { // called every 30 secs
     _vals["Pr"] = vals.press;
     _db.updateLiveRow("Lt", intvl, lt);
     _vals["Lt"] = lt;
-    std::cout << "SE>" << std::endl;
+    std::cout << "SE>";
 }
 
 // VANE "LOOP" METHODS==============================================================================================
 
 void Devi::vaneTasks() { // called every 100ms
-    /*std::cout << "vane begin" << std::endl;
     unsigned int p = wiringPiI2CRead(_vaneID); // ASSUMED TO BE SAME AS RICHARD'S pcf.digitalReadByte(); (Checked with Richard)
-    //std::cout << "vane I2c read" << std::endl;
+    
     int d;
     switch( p ) {
       case 1:     d = 0;     break;    //  1
@@ -285,18 +260,16 @@ void Devi::vaneTasks() { // called every 100ms
     _dirCounts[d]++;
     _dirHrCounts[d]++;
     
-    if (_vaneCount == 0) {
+    if (_vaneCount == VANE_LOOPS) {
         // Update the database with new counts
         int intvl;
         unsigned long millisNow = millis();
         intvl = millisNow - _prevVaneMillis;
         _prevVaneMillis = millisNow;
         _db.updateLiveWD(intvl, _dirCounts);
-        // reset vector values to 0
-        int i;
-        for (i = 0; i <= _numCmpPts; i++) _dirCounts[i] = 0;
+		std::this_thread::sleep_for(std::chrono::milliseconds(100));
         std::cout << "I am doing vane" << std::endl;
     }
-    _vaneCount = (_vaneCount + 1) % VANE_LOOPS;*/
+    _vaneCount = (_vaneCount + 1) % VANE_LOOPS;
 }
 

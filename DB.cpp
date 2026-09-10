@@ -11,8 +11,8 @@
 /***********************************************************************************************
 * DB.cpp: class handles all SQL and message/error logging interactions                         *
 *                                                                                              *
-* Version: 0.3                                                                                 *
-* Last updated 14/07/2026 17:02                                                                *
+* Version: 0.4                                                                                 *
+* Last updated 10/09/2026 11:04                                                                *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -69,11 +69,15 @@ bool DB::openConnection() {
     }
 
     std::string DB::dtString(std::string fString) {
+		/*dtString(): helper function to produce a string containing the current UTC time in the format specified.
+		parameter: fString: std::string: format string following the datetime format conventions
+		returns: std::string: current datetime as a string in the specified format
+		*/
         auto t = std::time(NULL);
         auto tm = *std::gmtime(&t);
         std::ostringstream oss;
         oss << std::put_time(&tm, fString.c_str());
-        auto sTime = oss.str();
+        std::string sTime = oss.str();
         return sTime;
     }
     
@@ -109,7 +113,6 @@ bool DB::openConnection() {
         std::string query;
         auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
         query = "UPDATE LiveValues SET Intvl = " + std::to_string(intvl) + ", Val = " + std::to_string(itemVal) + ", LastUpdated = " + sTime + " WHERE ItemName = '" + itemNm + "'";
-        //std::cout << query << std::endl;
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             std::string s(mysql_error(_myConn));
@@ -163,7 +166,6 @@ bool DB::openConnection() {
             query += ", " + std::to_string(row[i]);
         }
         query += ")";
-        std::cout << query << std::endl;
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             std::string s(mysql_error(_myConn));
@@ -195,7 +197,6 @@ bool DB::openConnection() {
             query += ", " + std::to_string(row[i]);
         }
         query += ")";
-        std::cout << query << std::endl;
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             std::string s(mysql_error(_myConn));
@@ -215,7 +216,6 @@ bool DB::openConnection() {
         bool bOK = openConnection();
         if (!bOK) return std::vector<float> {0.0, 0.0, 0.0};
         std::string query = "SELECT MAX(Rain) AS MaxRain, AVG(WSpeed) AS AveWSpeed, MAX(Gust) AS MaxGust FROM NowValues WHERE dtNow > DATE_SUB(CONCAT(UTC_DATE(), ' ', UTC_TIME()), INTERVAL 1 HOUR)";
-        std::cout << query << std::endl;
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             mysql_close(_myConn);
@@ -223,12 +223,13 @@ bool DB::openConnection() {
         }
         MYSQL_RES* result = mysql_use_result(_myConn);
         MYSQL_ROW row = mysql_fetch_row(result);
-        mysql_free_result(result);
-        mysql_close(_myConn);
+		int n = mysql_num_fields(result);
 
         if (result == NULL) return std::vector<float> {0.0, 0.0, 0.0};
-        std::vector<float> rv = {(float)atof(row[0]), (float)atof(row[1]), (float)atof(row[2])}; 
-        return rv; 
+        std::vector<float> rv = {(float)atof(row[0]), (float)atof(row[1]), (float)atof(row[2])};
+        mysql_free_result(result);
+        mysql_close(_myConn);
+		return rv; 
     }
     
     std::vector<int> DB::hourWDAggs() {
@@ -247,14 +248,11 @@ bool DB::openConnection() {
         if (status != 0) return std::vector<int> {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         MYSQL_RES* result = mysql_use_result(_myConn);
         MYSQL_ROW row = mysql_fetch_row(result);
-        mysql_free_result(result);
-        mysql_close(_myConn);
         if (result == NULL) return std::vector<int> {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         std::vector<int> rv;
-        int i;
-        for (i = 0; i < 17; i++) {
-             rv[i] = atoi(row[i]); 
-        }
+        for (int i = 0; i < 17; i++) rv[i] = atoi(row[i]); 
+        mysql_free_result(result);
+        mysql_close(_myConn);
         return rv;
 }
     
@@ -279,7 +277,7 @@ bool DB::openConnection() {
            std::string s(mysql_error(_myConn));
            _errMsg = s;
            mysql_close(_myConn);
-            return false;
+           return false;
         }
         mysql_close(_myConn);
         return true;

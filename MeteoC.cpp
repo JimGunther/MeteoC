@@ -6,15 +6,16 @@
 #include <vector>
 //#include <string>
 #include <wiringPi.h>
+#include <wiringSerial.h> // ADDED 08/09/2026
 #include "Devi.h"
 #include "DB.h"
-/*
+/*************************************************
 MeteoC.cpp: C++ version of code to run Meteo WS
-Version as at 13/07/2026
+Version as at 09/09/2026
 Written by Jim Gunther
-*/
+*************************************************/
 
-using namespace std;
+//using namespace std;
 
 class Tim {
   public:
@@ -47,6 +48,7 @@ time_t setupTime;
 int nowCount;
 int nowWDCount;
 int hrCount;
+int clockCount; // TEMP
 
 void anem() { dv.anemTasks(); }
 void rain() { dv.rainTasks(); }
@@ -59,8 +61,8 @@ void saveNowVals() {
     returns: void [float: percentage of "invalid" wind direction events measured ]
     */
     // First, save non-vane values
-    vector<float> v;
-    std::cout << "SNV start" << std::endl;
+    std::vector<float> v;
+    //std::cout << "SNV start" << std::endl;
     v.push_back(dv.getVal("Ra"));
     v.push_back(dv.getVal("Rv"));
     v.push_back(dv.getVal("Gu"));
@@ -86,7 +88,7 @@ void saveNowVals() {
     if ((ctInvalid > 8) && (ctInvalid < 144)) {
         db.addMessageEntry("Invalid wind direction for " + std::to_string(ctInvalid) + " times", false);
     }
-    std::cout << "SNV end" << std::endl;
+    //std::cout << "SNV end" << std::endl;
 }
     
 bool doHourly(int currHr) {
@@ -94,34 +96,38 @@ bool doHourly(int currHr) {
     parameters: none
     returns: bool: true if hour "ticked by"
     */
-   // WARNING! I THINK THIS CODE CAUSES A SEGMENTATION FAULT NEEDS CHECKING (13/07)
-    int ri = (int)db.getPrefFloat("RptIntvl");
+    // WARNING! I THINK THIS CODE CAUSES A SEGMENTATION FAULT NEEDS CHECKING (13/07)
+    std::cout << "Hour: " << std::to_string(currHr) << std::endl;
+	int ri = (int)db.getPrefFloat("RptIntvl");
     int expectedCount = int(14400 / ri);
     int diff = expectedCount - nowCount;
     if (diff > 2) {
         std::string s = "Expected records: " + std::to_string(expectedCount) + "; Actual records: " + std::to_string(nowCount) + " in hour " + std::to_string(currHr);
         db.addMessageEntry(s, false);
     }
-
-    if (nowCount > 0) { // no "Now" records this hour
+    if (nowCount > 0) { // "Now" records this hour
         std::vector<float> hv = db.hourAggregates(); //hv is 3-value vector
         //Construct the rest of the vector from current values
         hv.push_back(dv.getVal("Tp"));
         hv.push_back(dv.getVal("Hm"));
         hv.push_back(dv.getVal("Pr"));
         hv.push_back(dv.getVal("Lt"));
+		std::cout << "doHourly line 114" << std::endl;
         if (db.addHourRow(hv)) std::cout << "Hour saved:" + std::to_string(currHr) << std::endl;
         else std::cout << "Hour failed:" + std::to_string(currHr) << std::endl;
-
+		std::cout << "doHourly line 117" << std::endl;
         if (db.addWDRow(dv.getWDCounts(true), true)) std::cout << "WDHour saved:" + std::to_string(currHr) << std::endl;
         else std::cout << "WDHour failed:" + std::to_string(currHr) << std::endl;
+		std::cout << "doHourly line 120" << std::endl;
         
         hrCount += 1;
         nowCount = 0;
+		std::cout << "Hourly line 122" << std::endl;
         return true;
         }
     else {
         db.addMessageEntry("No records this hour: " + std::to_string(currHr), false);
+		std::cout << "No records this hour" << std::endl;
         return false;
     }
 }
@@ -209,7 +215,9 @@ void clockTasks() { // Called every 30secs
             }
         }
     }
-    std::cout << "CE>" << std::endl;
+    std::cout << "CE>";
+	clockCount = (clockCount + 1) % 5; // TEMP
+	if (clockCount == 0) std::cout << std::endl; // TEMP
 }
 
 int main()
@@ -220,6 +228,7 @@ int main()
     if (bOK) std::cout << "Preference file read OK." << std::endl;
 
     nowCount = nowWDCount = hrCount = 0;
+	clockCount = 0; // TEMP
     unsigned int status;
     
     while (millis() < bootMillis + 400) { ; }

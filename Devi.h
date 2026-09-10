@@ -64,7 +64,7 @@ class Devi {
         unsigned long _prevAnemMillis;
         unsigned long _prevSensMillis;
         bool _bHXWorking;
-        std::deque<double> _rainWeights;
+        /*std::deque<double> _rainWeights;
         double _rainFull;
         float _rainRatio;
         double _rainTare;
@@ -74,6 +74,8 @@ class Devi {
         double _rainBank;
         int _rainCount;
         bool _bEmptying;
+		*/
+		int _rainFD;
         int _vaneCount;
         int _vaneID;
         std::vector<int> _dirCounts;
