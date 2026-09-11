@@ -88,7 +88,6 @@ void saveNowVals() {
     if ((ctInvalid > 8) && (ctInvalid < 144)) {
         db.addMessageEntry("Invalid wind direction for " + std::to_string(ctInvalid) + " times", false);
     }
-    //std::cout << "SNV end" << std::endl;
 }
     
 bool doHourly(int currHr) {
@@ -96,8 +95,6 @@ bool doHourly(int currHr) {
     parameters: none
     returns: bool: true if hour "ticked by"
     */
-    // WARNING! I THINK THIS CODE CAUSES A SEGMENTATION FAULT NEEDS CHECKING (13/07)
-    std::cout << "Hour: " << std::to_string(currHr) << std::endl;
 	int ri = (int)db.getPrefFloat("RptIntvl");
     int expectedCount = int(14400 / ri);
     int diff = expectedCount - nowCount;
@@ -112,17 +109,17 @@ bool doHourly(int currHr) {
         hv.push_back(dv.getVal("Hm"));
         hv.push_back(dv.getVal("Pr"));
         hv.push_back(dv.getVal("Lt"));
-		std::cout << "doHourly line 114" << std::endl;
+		//std::cout << "doHourly line 114" << std::endl;
         if (db.addHourRow(hv)) std::cout << "Hour saved:" + std::to_string(currHr) << std::endl;
         else std::cout << "Hour failed:" + std::to_string(currHr) << std::endl;
-		std::cout << "doHourly line 117" << std::endl;
+		//std::cout << "doHourly line 117" << std::endl;
         if (db.addWDRow(dv.getWDCounts(true), true)) std::cout << "WDHour saved:" + std::to_string(currHr) << std::endl;
         else std::cout << "WDHour failed:" + std::to_string(currHr) << std::endl;
-		std::cout << "doHourly line 120" << std::endl;
+		//std::cout << "doHourly line 120" << std::endl;
         
         hrCount += 1;
         nowCount = 0;
-		std::cout << "Hourly line 122" << std::endl;
+		//std::cout << "Hourly line 122" << std::endl;
         return true;
         }
     else {
@@ -218,6 +215,7 @@ void clockTasks() { // Called every 30secs
     std::cout << "CE>";
 	clockCount = (clockCount + 1) % 5; // TEMP
 	if (clockCount == 0) std::cout << std::endl; // TEMP
+	else std::cout << "*";
 }
 
 int main()
@@ -234,6 +232,8 @@ int main()
     while (millis() < bootMillis + 400) { ; }
     status = dv.setupDevices(db);
     std::cout << "Device setup status: " << status << std::endl;
+	std::string txt = "Startup status: " + std::to_string(status);
+	db.addMessageEntry(txt, false);
     if (status > 0) {
         setupTime = std::time(NULL);
         nowCount = 0;

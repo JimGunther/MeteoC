@@ -11,8 +11,8 @@
 /***********************************************************************************************
 * DB.cpp: class handles all SQL and message/error logging interactions                         *
 *                                                                                              *
-* Version: 0.4                                                                                 *
-* Last updated 10/09/2026 11:04                                                                *
+* Version: 0.5                                                                                 *
+* Last updated 11/09/2026 12:37                                                                *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -94,9 +94,12 @@ bool DB::openConnection() {
         std::string ff;
         if (isErr) ff = "ER";
         else ff = "MS";
-        std::string fName = "./Logs/" + ff + sDate;
+        std::string fName = "/Logs/" + ff + sDate;
+		std::cout << fName << std::endl;
         std::ofstream log(fName, std::ios_base::app | std::ios_base::out);
-        log << txt << std::endl;
+	    log  << sTime << ":" << txt << std::endl;
+		std::cout << sTime << ":" << txt << std::endl; // TEMP!
+		log.close();
         return true;
     }
 
@@ -271,7 +274,7 @@ bool DB::openConnection() {
             query += ", " + std::to_string(row[i]);
         }
         query += ")";
-        std::cout << query << std::endl;
+        //std::cout << query << std::endl;
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
            std::string s(mysql_error(_myConn));
@@ -289,12 +292,13 @@ bool DB::openConnection() {
         parameters:
             risefall: int: -1, 0, or +1 (fall, steady, rise)
         returns: bool: true if successful, false otherwise
-        '*/
+        */
         bool bOK = openConnection();
         if (!bOK) return false;
-        auto sDT = dtString("'%Y-%m-%d 00:00:00', '");
+        auto sDT = dtString("'%Y-%m-%d 00:00:00', ");
         std::string query = "CALL spHourToDay(" + sDT + std::to_string(risefall) + ")";
         std::cout << query << std::endl;
+		addMessageEntry(query, true);
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             std::string s(mysql_error(_myConn));

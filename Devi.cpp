@@ -73,7 +73,7 @@ unsigned int Devi::setupDevices(DB dBase) {
     // Rain setup_____________________________________________________________________________________
 	_rainFD = serialOpen("/dev/ttyAMA10", 115200); // NAME OF DEVICE UNCERTAIN!!
     /*REPLACE WITH "SERIAL" SETUP*/
-	std::cout << "_rainFD: " << _rainFD << std::endl;
+	//std::cout << "_rainFD: " << _rainFD << std::endl;
     if (_rainFD >= 0) std::cout << "Rain gauge setup completed." << std::endl;
     else std::cout << "Rain gauge setup bypassed." << std::endl;
 
