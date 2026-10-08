@@ -94,9 +94,10 @@ bool DB::openConnection() {
         std::string ff;
         if (isErr) ff = "ER";
         else ff = "MS";
-        std::string fName = "/Logs/" + ff + sDate;
+        std::string fName = "Logs/" + ff + sDate;
 		std::cout << fName << std::endl;
-        std::ofstream log(fName, std::ios_base::app | std::ios_base::out);
+        std::ofstream log;
+		log.open(fName, std::ios_base::app | std::ios_base::out);
 	    log  << sTime << ":" << txt << std::endl;
 		std::cout << sTime << ":" << txt << std::endl; // TEMP!
 		log.close();
