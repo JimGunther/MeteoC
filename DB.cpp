@@ -12,7 +12,7 @@
 * DB.cpp: class handles all SQL and message/error logging interactions                         *
 *                                                                                              *
 * Version: 0.5                                                                                 *
-* Last updated 11/09/2026 12:37                                                                *
+* Last updated 13/09/2026 16:08                                                                *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -102,20 +102,40 @@ bool DB::openConnection() {
 		log.close();
         return true;
     }
-
-    bool DB::updateLiveRow(std::string itemNm, int intvl, float itemVal) {
-        /*updateLiveRow(): method to update one item in LiveValues table
+	
+	bool DB::updateLiveRow(std::string nm, float val) {
+	    /*updateLiveRow(): method to update one item (rain) in LiveValues table
         parameters:
-            itemNm: 2-character code name for item
-            intvl: interval since last measurement
+		nm:: name of item
             itemVal: int: new value for item
         returns: bool: true if successful, otherwise false
         */
         bool bOK = openConnection();
         if (!bOK) return false;
         std::string query;
-        auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
-        query = "UPDATE LiveValues SET Intvl = " + std::to_string(intvl) + ", Val = " + std::to_string(itemVal) + ", LastUpdated = " + sTime + " WHERE ItemName = '" + itemNm + "'";
+        //auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
+        query = "UPDATE LiveValues SET Val = " + std::to_string(val) + ", LastUpdated = UTC_TIMESTAMP() WHERE ItemName = '" + nm + "'";
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            std::string s(mysql_error(_myConn));
+            _errMsg = s;
+        }
+        mysql_close(_myConn);
+        return (status == 0);            
+    
+	}
+
+    bool DB::updateLiveRain(float itemVal) {
+        /*updateLiveRow(): method to update one item (rain) in LiveValues table
+        parameters:
+            itemVal: int: new value for item
+        returns: bool: true if successful, otherwise false
+        */
+        bool bOK = openConnection();
+        if (!bOK) return false;
+        std::string query;
+        //auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
+        query = "UPDATE LiveValues SET Val = " + std::to_string(itemVal) + ", LastUpdated = UTC_TIMESTAMP() WHERE ItemName = 'Ra'";
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             std::string s(mysql_error(_myConn));
@@ -124,6 +144,49 @@ bool DB::openConnection() {
         mysql_close(_myConn);
         return (status == 0);            
     }
+	
+    bool DB::updateLiveWind(float ws, float gu) {
+        /*updateLiveWind(): method to update one item (rain) in LiveValues table
+        parameters:
+            ws: float: new value for wind speed
+			gu: float: new value for gust
+        returns: bool: true if successful, otherwise false
+        */
+        bool bOK = openConnection();
+        if (!bOK) return false;
+        std::string query;
+        auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
+        query = "CALL spLiveWind(" + std::to_string(ws) + ", " + std::to_string(gu) + ")";
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            std::string s(mysql_error(_myConn));
+            _errMsg = s;
+        }
+        mysql_close(_myConn);
+        return (status == 0);            
+    }
+	
+    bool DB::updateLiveSens(float tp, float hm, float pr, float lt) {
+        /*updateLiveSens(): method to update sensors values in LiveValues table
+        parameters:
+            tp: float: new value for temperature
+			hm: float: new value for humidity
+            pr: float: new value for pressure
+			lt: float: new value for light
+        returns: bool: true if successful, otherwise false
+        */
+        bool bOK = openConnection();
+        if (!bOK) return false;
+        std::string query;
+        query = "CALL spLiveWind(" + std::to_string(tp) + ", " + std::to_string(hm) + ", " + std::to_string(pr) + ", " + std::to_string(lt) + ")";
+        int status = mysql_query(_myConn, query.c_str());
+        if (status != 0) {
+            std::string s(mysql_error(_myConn));
+            _errMsg = s;
+        }
+        mysql_close(_myConn);
+        return (status == 0);            
+    }	
        
     bool DB::updateLiveWD(int intvl, std::vector<int> counts) {
         /*updateLiveWD(): method to update all 17 rows in WDLive table
@@ -152,10 +215,10 @@ bool DB::openConnection() {
         return true;
     }
     
-    bool DB::addNowRow(std::vector<float> row) {
+    bool DB::addNowRow(scoreboard sb) {
         /*addNowRow(): method to add a new row to NowValues table
         parameters:
-            row: array of 8 float values
+            sb: scoreboard: struct of 8 float values
         returns: bool: True if successful, otherwise False
         */
         bool bOK = openConnection();
@@ -163,13 +226,11 @@ bool DB::openConnection() {
 
         std::string query;
         std::string sDT = dtString("'%Y-%m-%d %H:%M:%S'");
-        query = "INSERT INTO NowValues(dtNow, Rain, WSpeed, Gust, Temp, Humdty, Pressure, Light) VALUES (" + sDT;
-        int i;
-        for (i = 0; i < NUM_NOW; i++) {
-            query += ", " + std::to_string(row[i]);
-        }
-        query += ")";
+        query = "INSERT INTO NowValues(dtNow, Rain, WSpeed, Gust, Temp, Humdty, Pressure, Light) VALUES (" + sDT + ", ";
+        query += std::to_string(sb.rain) + ", " + std::to_string(sb.wspeed) + ", " + std::to_string(sb.gust) + ", " + std::to_string(sb.temp) + ", ";
+		query += std::to_string(sb.humdty) + ", " + std::to_string(sb.press) + ", " + std::to_string(sb.light) + ")";
         int status = mysql_query(_myConn, query.c_str());
+		//std::cout << query << std::endl;
         if (status != 0) {
             std::string s(mysql_error(_myConn));
             _errMsg = s;
@@ -200,6 +261,7 @@ bool DB::openConnection() {
             query += ", " + std::to_string(row[i]);
         }
         query += ")";
+		//std::cout << query << std::endl;
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             std::string s(mysql_error(_myConn));

@@ -5,12 +5,13 @@
 #include <mysql/mysql.h>
 #include <map>
 #include <vector>
+#include "Defines.h"
 
 /***********************************************************************************************
 * DB.h: header file for DB class                                                               *
 *                                                                                              *
 * Version: 0.2                                                                                 *
-* Last updated: 10/07/2026 12:25                                                               *
+* Last updated: 13/07/2026 16:27                                                               *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -32,9 +33,12 @@ class DB {
     void begin();
     float getPrefFloat(std::string prefName);
     std::string dtString(std::string fString);
-    bool updateLiveRow(std::string itemNm, int intvl, float itemVal);
+	bool updateLiveRow(std::string nm, float val);
+    bool updateLiveRain(float itemVal);
+	bool updateLiveWind(float ws, float gu);
+	bool updateLiveSens(float tp, float hm, float pr, float lt);
     bool updateLiveWD(int intvl, std::vector<int> counts);
-    bool addNowRow(std::vector<float> row);
+    bool addNowRow(scoreboard sb);
     bool addWDRow(std::vector<int> row, bool bHour);
     bool addMessageEntry(std::string txt,bool isErr);
     std::vector<float> hourAggregates();

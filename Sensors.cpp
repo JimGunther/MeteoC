@@ -202,7 +202,7 @@ void BME280::getRawData(int fd, bme280_raw_data *raw) {
 }
 
 //============================================================================================
-
+/*
 HX711::HX711() {
   _clockPin  = RN_CLOCK_PIN;
   _outPin  = RN_DATA_PIN;
@@ -258,3 +258,4 @@ long HX711::read() {
   data[2] = std::byte((int)data[2] ^ 0x80);
   return ((uint32_t) data[2] << 16) | ((uint32_t) data[1] << 8) | (uint32_t) data[0];
 }
+*/

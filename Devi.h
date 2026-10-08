@@ -1,6 +1,6 @@
 /**************************************************************************************** 
 Devi.h: manages all device-handling code
-Version of 13/07/2026
+Version of 08/10/2026
 Written by Jim Gunther
 ****************************************************************************************/
 #ifndef DEVI_H
@@ -8,9 +8,10 @@ Written by Jim Gunther
 
 #include <vector>
 #include <map>
-#include <deque>
+#include <termios.h>
 #include "Sensors.h"
 #include "DB.h"
+#include "Defines.h"
 
 #define ANEM_STATUS 1
 #define RAIN_STATUS 2
@@ -35,25 +36,27 @@ class Devi {
     public:
         Devi();
         unsigned int setupDevices(DB dBase);
-        float getVal(std::string nm);
+        //float getVal(std::string nm);
+		scoreboard getScoreboard();
         std::vector<int> getWDCounts(bool bHourly);
         void resetWDCounts();
         void anemTasks();
         void rainTasks();
         void sensTasks();
         void vaneTasks();
+		void resetRainBank();
 
     private:
-        bool updateMaxGust();
-        void startEmptying(double weight_mg);
-        void stopEmptying(double weight_mg);
-        double aveRainWeight();
+        int openSerialPort(const char* portName);
+		bool configureSerialPort(int fd, int speed);
+		bool updateMaxGust();
 
-        DB _db;
+        struct termios _oldtio, _newtio;
+		DB _db;
         BH1750 _lightA;
         BH1750 _lightB;
         BME280 _bme;
-        HX711 _hx;
+        //HX711 _hx;
         std::map<std::string, float> _vals;
         unsigned int _deviStatus;
         int _anemCount;
@@ -64,17 +67,12 @@ class Devi {
         unsigned long _prevAnemMillis;
         unsigned long _prevSensMillis;
         bool _bHXWorking;
-        /*std::deque<double> _rainWeights;
-        double _rainFull;
+		scoreboard _scBd;
+		int _currTips, _prevTips;
+		float _rainWeight, _prevRainWeight;
         float _rainRatio;
-        double _rainTare;
-        double _prevRainWeight;
-        unsigned long _prevRainMillis;
-        double _startEmpWeight;
-        double _rainBank;
-        int _rainCount;
-        bool _bEmptying;
-		*/
+		float _rainBank;
+		char _rainBuf[128];
 		int _rainFD;
         int _vaneCount;
         int _vaneID;

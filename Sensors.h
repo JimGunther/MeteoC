@@ -3,7 +3,7 @@
 #include <stdint.h>
 /****************************************************************************************************
  * Sensors.h: header file for sensors BH1750 (light), BME280 (temp,hum,press) and HX711 (rain weight)
- * Version of 14/07/2026
+ * Version of 28/09/2026
  * Written by Jim Gunther
  ***************************************************************************************************/
 
@@ -145,7 +145,7 @@ class BME280
 };
 
 //__________________________________________________________________________________________
-
+/*
 class HX711
 {
   private:
@@ -161,6 +161,6 @@ class HX711
     void setGain(int gain = 128);
     long read();
 };
-
+*/
 
 #endif /* SENSORS_H*/

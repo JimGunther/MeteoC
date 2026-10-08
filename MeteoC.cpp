@@ -11,7 +11,7 @@
 #include "DB.h"
 /*************************************************
 MeteoC.cpp: C++ version of code to run Meteo WS
-Version as at 09/09/2026
+Version as at 08/10/2026
 Written by Jim Gunther
 *************************************************/
 
@@ -28,8 +28,8 @@ class Tim {
       while (true)
       { 
         auto x = std::chrono::steady_clock::now() + std::chrono::milliseconds(interval);
-        func();
         std::this_thread::sleep_until(x);
+        func();
       }
     }).detach();
   };
@@ -37,7 +37,7 @@ class Tim {
 
 
 #define ANEM_INTVL 250
-#define RAIN_INTVL 1000 
+#define RAIN_INTVL 10000 
 #define SENS_INTVL 30000
 #define VANE_INTVL 100
 #define CLOCK_INTVL 30000
@@ -61,16 +61,9 @@ void saveNowVals() {
     returns: void [float: percentage of "invalid" wind direction events measured ]
     */
     // First, save non-vane values
-    std::vector<float> v;
+	scoreboard sb = dv.getScoreboard();
     //std::cout << "SNV start" << std::endl;
-    v.push_back(dv.getVal("Ra"));
-    v.push_back(dv.getVal("Rv"));
-    v.push_back(dv.getVal("Gu"));
-    v.push_back(dv.getVal("Tp"));
-    v.push_back(dv.getVal("Hm"));
-    v.push_back(dv.getVal("Pr"));
-    v.push_back(dv.getVal("Lt"));
-    bool ok = db.addNowRow(v);
+    bool ok = db.addNowRow(sb);
     if (ok) nowCount++;
     else db.addMessageEntry(db.error(), true);
      
@@ -105,10 +98,12 @@ bool doHourly(int currHr) {
     if (nowCount > 0) { // "Now" records this hour
         std::vector<float> hv = db.hourAggregates(); //hv is 3-value vector
         //Construct the rest of the vector from current values
-        hv.push_back(dv.getVal("Tp"));
-        hv.push_back(dv.getVal("Hm"));
-        hv.push_back(dv.getVal("Pr"));
-        hv.push_back(dv.getVal("Lt"));
+		scoreboard sb1 = dv.getScoreboard();
+        hv.push_back(sb1.temp);
+        hv.push_back(sb1.humdty);
+        hv.push_back(sb1.press);
+        hv.push_back(sb1.light); 
+
 		//std::cout << "doHourly line 114" << std::endl;
         if (db.addHourRow(hv)) std::cout << "Hour saved:" + std::to_string(currHr) << std::endl;
         else std::cout << "Hour failed:" + std::to_string(currHr) << std::endl;
@@ -175,7 +170,8 @@ int riseFall(std::vector<hr_pressure> hourlyPress) {
 }
 
 bool doDaily() { 
-    // reset daily rainfall first:add later
+    // reset daily rainfall first
+	dv.resetRainBank();
     if (hrCount > 0) {
         std::vector<hr_pressure> hourlyPress = db.getHrPressures();
         int rf;
@@ -198,7 +194,8 @@ void clockTasks() { // Called every 30secs
     if ((t - setupTime) < 30) return; // Suppress clock tasks for the first 30 seconds
     
     std::cout << "<CB:";
-    saveNowVals();
+    dv.sensTasks();
+	saveNowVals();
     
     struct tm* tim = std::gmtime(&t);
     int tSecs = tim->tm_sec;
@@ -215,12 +212,12 @@ void clockTasks() { // Called every 30secs
     std::cout << "CE>";
 	clockCount = (clockCount + 1) % 5; // TEMP
 	if (clockCount == 0) std::cout << std::endl; // TEMP
-	else std::cout << "*";
+	else std::cout << "*" << std::flush;
 }
 
 int main()
 {
-    Tim tAnem, tRain, tSens, tVane, tMaster;
+    Tim tAnem, tRain, /*tSens,*/ tVane, tMaster;
     unsigned long bootMillis = millis();
     bool bOK = db.readPrefs();
     if (bOK) std::cout << "Preference file read OK." << std::endl;
@@ -240,8 +237,8 @@ int main()
         tAnem.timer_start(anem, ANEM_INTVL);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         tRain.timer_start(rain, RAIN_INTVL);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        tSens.timer_start(sens, SENS_INTVL);
+        //std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        //tSens.timer_start(sens, SENS_INTVL);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         tVane.timer_start(vane, VANE_INTVL);
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
