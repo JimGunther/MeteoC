@@ -2,6 +2,7 @@
 #include "DB.h"
 #include <ctime>
 #include <string>
+#include <cstring>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -12,7 +13,7 @@
 * DB.cpp: class handles all SQL and message/error logging interactions                         *
 *                                                                                              *
 * Version: 0.5                                                                                 *
-* Last updated 13/09/2026 16:08                                                                *
+* Last updated 11/109/2026 07:31                                                                *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -189,29 +190,32 @@ bool DB::openConnection() {
         return (status == 0);            
     }	
        
-    bool DB::updateLiveWD(int intvl, std::vector<int> counts) {
+    bool DB::updateLiveWD(int intvl, int* counts) {
         /*updateLiveWD(): method to update all 17 rows in WDLive table
         parameters:
             int: interval in ms since last update
             counts: array of 17 integers (16 compass points plus dustbin)
         returns: bool: true if successful, otherwise false
         */
-        int i, numPts = (int)getPrefFloat("CmpsPnts");
+        int i;
         bool bOK = openConnection();
         if (!bOK) return false;
 
-        std::string query;
+        std::cout << "[" << std::flush;
+		std::string query;
         auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
-        for (i = 0; i <= numPts; i++) {
+        for (i = 0; i <= NUM_CP; i++) {
             query = "UPDATE WDLive SET WDCount = " + std::to_string(counts[i]) + " WHERE PK = " + std::to_string(i + 1); // PK is 1-based!
             int status = mysql_query(_myConn, query.c_str());
             if (status != 0) {
                 std::string s(mysql_error(_myConn));
                 _errMsg = s;
                 mysql_close(_myConn);
+				std::cout << sTime << ";i=" << i << ";" + _errMsg << std::endl;
                 return false;
             }
         }
+		std::cout << "]" << std::flush;
         mysql_close(_myConn);
         return true;
     }
@@ -242,10 +246,10 @@ bool DB::openConnection() {
         return true;
 }
 
-    bool DB::addWDRow(std::vector<int> row, bool bHour) {
+    bool DB::addWDRow(int* row, bool bHour) {
         /*addWDRow(): method to add a new row to WDNow table
         parameters:
-            row: vector of 17 values
+            row: array of 17 values
             bHour: True if adding to WDHour table, False if WDNow table
         returns: bool: True if successful, otherwise False
         */
@@ -257,8 +261,8 @@ bool DB::openConnection() {
         auto sDT = dtString("'%Y-%m-%d %H:%M:%S'");
         std::string query;
         query = "INSERT INTO WD" + strIns + ", N, NNW, NW, WNW, W, WSW, SW, SSW, S, SSE, SE, ESE, E, ENE, NE, NNE, INV) VALUES (" + sDT;
-        int i, numPts = (int)getPrefFloat("CmpsPnts");
-        for (i = 0; i <= numPts; i++) {
+        int i;
+        for (i = 0; i <= NUM_CP; i++) {
             query += ", " + std::to_string(row[i]);
         }
         query += ")";
@@ -298,28 +302,26 @@ bool DB::openConnection() {
 		return rv; 
     }
     
-    std::vector<int> DB::hourWDAggs() {
+    void DB::hourWDAggs(int* aggs) {
         /*hourWDAggs(): gets hourly aggregates for Wind direction
         parameters: none
-            cls: this class object
-        returns: vector of 17 results
+        returns: array of 17 results
         */
         bool bOK = openConnection();
-        if (!bOK) return std::vector<int> {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        memset(aggs, 0, sizeof(aggs));
+		if (!bOK) return;
         std::string query = "SELECT SUM(N) AS hrN, SUM(NNW) AS hrNNW, SUM(NW) AS hrNW, SUM(WNW) AS hrWNW, SUM(W) AS hrW, SUM(WSW) AS hrWSW, SUM(SW) AS hrSW, SUM(SSW) AS hrSSW, SUM(S) AS hrS, ";
         query += "SUM(SSE) AS hrSSE, SUM(SE) AS hrSE, SUM(ESE) AS hrESE, SUM(E) AS hrE, SUM(ENE) AS hrENE, SUM(NE) AS hrNE, SUM(NNE) AS hrNNE, SUM(INV) AS hrINV FROM WDNow ";
         query += "WHERE dtWDNow > DATE_SUB(CONCAT(UTC_DATE(), ' ', UTC_TIME()), INTERVAL 1 HOUR)";
         std::cout << query << std::endl;
         int status = mysql_query(_myConn, query.c_str());
-        if (status != 0) return std::vector<int> {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+        if (status != 0) return;
         MYSQL_RES* result = mysql_use_result(_myConn);
         MYSQL_ROW row = mysql_fetch_row(result);
-        if (result == NULL) return std::vector<int> {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-        std::vector<int> rv;
-        for (int i = 0; i < 17; i++) rv[i] = atoi(row[i]); 
+        if (result == NULL) return;
+        for (int i = 0; i <= NUM_CP; i++) aggs[i] = atoi(row[i]); 
         mysql_free_result(result);
         mysql_close(_myConn);
-        return rv;
 }
     
     bool DB::addHourRow(std::vector<float> row) {

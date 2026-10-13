@@ -1,6 +1,6 @@
 /**************************************************************************************** 
 Devi.h: manages all device-handling code
-Version of 08/10/2026
+Version of 13/10/2026
 Written by Jim Gunther
 ****************************************************************************************/
 #ifndef DEVI_H
@@ -36,9 +36,8 @@ class Devi {
     public:
         Devi();
         unsigned int setupDevices(DB dBase);
-        //float getVal(std::string nm);
 		scoreboard getScoreboard();
-        std::vector<int> getWDCounts(bool bHourly);
+        int* getWDCounts(bool bHourly);
         void resetWDCounts();
         void anemTasks();
         void rainTasks();
@@ -76,8 +75,8 @@ class Devi {
 		int _rainFD;
         int _vaneCount;
         int _vaneID;
-        std::vector<int> _dirCounts;
-        std::vector<int> _dirHrCounts;
+		int _dirCounts[NUM_CP];
+        int _dirHrCounts[NUM_CP];
         int _numCmpPts;
         unsigned long _prevVaneMillis;
 

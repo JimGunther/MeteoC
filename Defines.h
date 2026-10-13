@@ -11,4 +11,6 @@ struct scoreboard {
 	float light;
 };
 
+#define NUM_CP 16
+
 #endif

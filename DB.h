@@ -11,7 +11,7 @@
 * DB.h: header file for DB class                                                               *
 *                                                                                              *
 * Version: 0.2                                                                                 *
-* Last updated: 13/07/2026 16:27                                                               *
+* Last updated: 13/10/2026 07:30                                                               *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -37,12 +37,12 @@ class DB {
     bool updateLiveRain(float itemVal);
 	bool updateLiveWind(float ws, float gu);
 	bool updateLiveSens(float tp, float hm, float pr, float lt);
-    bool updateLiveWD(int intvl, std::vector<int> counts);
+    bool updateLiveWD(int intvl, int* counts);
     bool addNowRow(scoreboard sb);
-    bool addWDRow(std::vector<int> row, bool bHour);
+    bool addWDRow(int* row, bool bHour);
     bool addMessageEntry(std::string txt,bool isErr);
     std::vector<float> hourAggregates();
-    std::vector<int> hourWDAggs();
+    void hourWDAggs(int* aggs);
     bool addHourRow(std::vector<float> row);
     bool addDayRow(int riseFall);
     std::vector<hr_pressure> getHrPressures();

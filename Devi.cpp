@@ -16,7 +16,7 @@
 #include "Sensors.h"
 /*********************************************************************************************************
  * Devi class implementation file
- * Version of 08/10/2026 15:48
+ * Version of 13/10/2026 20:35
  * Written by Jim Gunther
 **********************************************************************************************************/
 volatile int isrRevs;
@@ -140,11 +140,9 @@ unsigned int Devi::setupDevices(DB dBase) {
     }
     //std::cout << "VaneID:" << _vaneID << std::endl;
     b = b && (_vaneID > 0);
-    float fcp = _db.getPrefFloat("CmpsPnts");
-    _numCmpPts = (int)fcp;   // initiate direction counts vector
-    for (i = 0; i <= _numCmpPts; i++) {
-        _dirCounts.push_back(0);
-        _dirHrCounts.push_back(0);
+    for (i = 0; i <= NUM_CP; i++) {
+        _dirCounts[i] = 0;
+        _dirHrCounts[i] = 0;
     }
     _prevVaneMillis = millis();
     if (_vaneID > 0) {
@@ -156,16 +154,15 @@ unsigned int Devi::setupDevices(DB dBase) {
     return _deviStatus;
 }
 
-//float Devi::getVal(std::string nm) { return _vals[nm]; }
 scoreboard Devi::getScoreboard() { return _scBd; }
 
-std::vector<int> Devi::getWDCounts(bool bHourly) {     if (bHourly) return _dirHrCounts;
+int* Devi::getWDCounts(bool bHourly) {
+	if (bHourly) return _dirHrCounts;
     else return _dirCounts;
 }
 
 void Devi::resetWDCounts() {
-    int i;
-    for (i = 0; i < _dirCounts.size(); i++) _dirCounts[i] = 0;
+    for (int i = 0; i <= NUM_CP; i++) _dirCounts[i] = 0;
 }
 
 // ANEMOMETER "LOOP" METHODS==========================================================================================
@@ -201,7 +198,7 @@ void Devi::anemTasks() { // called every 250ms
     }
     
     if (_anemCount == 0) { // every 15secs
-        std::cout << "<AB:" << std::flush;
+        std::cout << "<a" << std::flush;
         millisNow = millis();
         intvl = millisNow - _prevAnemMillis;
         if (intvl > 0) ws = r * revs15Inc / intvl;
@@ -209,8 +206,8 @@ void Devi::anemTasks() { // called every 250ms
         _prevAnemMillis = millisNow;
         _db.updateLiveRow("Rv", ws);
         _vals["Rv"] = ws;
-		unsigned long millisEnd = millis();
-        std::cout << (millisEnd - millisNow) << "AE>" << std::flush;
+		//unsigned long millisEnd = millis();
+        std::cout << "A>" << std::flush;
     }
     _anemCount = (_anemCount + 1) % ANEM_LOOPS;
 }
@@ -218,7 +215,7 @@ void Devi::anemTasks() { // called every 250ms
 // RAIN "LOOP" METHODS================================================================================================
 
 void Devi::rainTasks() { // called every second(?)
-	std::cout << "<RS:";
+	std::cout << "<r";
 	int num = read(_rainFD, _rainBuf, sizeof(_rainBuf));
 	if (num > 0) {
 		//Read it!
@@ -237,7 +234,7 @@ void Devi::rainTasks() { // called every second(?)
 		_prevRainWeight = _rainWeight;
 		_prevTips = _currTips;		
 	}       
-    std::cout << "RE>";
+    std::cout << "R>";
 }
 
 void Devi::resetRainBank() { _rainBank = 0.0f; }
@@ -250,7 +247,7 @@ void Devi::sensTasks() { // called every 30 secs
     unsigned long millisNow = millis();
     intvl = millisNow - _prevSensMillis;
     _prevSensMillis = millisNow;
-    std::cout << "<SB:" << std::flush;
+    std::cout << "<s" << std::flush;
     float lt = 0.5 * ( _lightA.getLux() + _lightB.getLux());
     bme_280_values vals = _bme.getValues();
     // Load scoreboard values
@@ -259,7 +256,7 @@ void Devi::sensTasks() { // called every 30 secs
     _scBd.press = vals.press;
     _scBd.light = lt;
 	unsigned long millisEnd = millis();
-    std::cout << (millisEnd - millisNow) << "SE>" << std::flush;
+    std::cout << (millisEnd - millisNow) << "S>" << std::flush;
 }
 
 // VANE "LOOP" METHODS==============================================================================================
@@ -293,15 +290,18 @@ void Devi::vaneTasks() { // called every 100ms
     _dirHrCounts[d]++;
     
     if (_vaneCount == 0) {
-		std::cout << "<VB:" << std::flush;
+		std::cout << "<v" << std::flush;
         // Update the database with new counts
         int intvl;
         unsigned long millisNow = millis();
         intvl = millisNow - _prevVaneMillis;
         _prevVaneMillis = millisNow;
+		// NB : to avoid segmentation error, maybe pass vector by reference??
+		std::cout << "x" << std::flush;
         _db.updateLiveWD(intvl, _dirCounts);
+		std::cout << "z" << std::flush;
 		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::cout << "VE>" << std::flush;
+        std::cout << "V>" << std::flush;
     }
     _vaneCount = (_vaneCount + 1) % VANE_LOOPS;
 }

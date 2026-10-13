@@ -11,7 +11,7 @@
 #include "DB.h"
 /*************************************************
 MeteoC.cpp: C++ version of code to run Meteo WS
-Version as at 08/10/2026
+Version as at 10/10/2026 23:39
 Written by Jim Gunther
 *************************************************/
 
@@ -68,9 +68,8 @@ void saveNowVals() {
     else db.addMessageEntry(db.error(), true);
      
     // And now, vane values
-    std::vector<int> wdCounts = dv.getWDCounts(false);
-    int n = (int)db.getPrefFloat("CmpsPnts");
-    int ctInvalid = wdCounts[n];
+    int* wdCounts = dv.getWDCounts(false);
+    int ctInvalid = wdCounts[NUM_CP];
     ok = db.addWDRow(wdCounts, false);
     if (ok) nowWDCount++;
     else {
@@ -78,7 +77,7 @@ void saveNowVals() {
         db.addMessageEntry(errMsg, true);
     }
     dv.resetWDCounts();
-    if ((ctInvalid > 8) && (ctInvalid < 144)) {
+    if ((ctInvalid > 8) && (ctInvalid < 294)) {
         db.addMessageEntry("Invalid wind direction for " + std::to_string(ctInvalid) + " times", false);
     }
 }
@@ -193,7 +192,7 @@ void clockTasks() { // Called every 30secs
     time_t  t = std::time(NULL);
     if ((t - setupTime) < 30) return; // Suppress clock tasks for the first 30 seconds
     
-    std::cout << "<CB:";
+    std::cout << "<c:";
     dv.sensTasks();
 	saveNowVals();
     
@@ -209,7 +208,7 @@ void clockTasks() { // Called every 30secs
             }
         }
     }
-    std::cout << "CE>";
+    std::cout << "C>";
 	clockCount = (clockCount + 1) % 5; // TEMP
 	if (clockCount == 0) std::cout << std::endl; // TEMP
 	else std::cout << "*" << std::flush;
