@@ -27,7 +27,7 @@ Written by Jim Gunther
 #define RAIN_LOOPS 30
 #define VANE_LOOPS 300
 #define DEBNCE_MARGIN 5 // milliseconds
-#define ANEM_PIN 23 // arbitrary
+#define ANEM_PIN 13 // confirmed in hardware 14.10.2026
 #define EMPTY_MARGIN 0.02
 #define RAIN_DEQ_LEN 25
 #define GUSTPOLL_COUNT 12
