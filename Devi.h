@@ -1,6 +1,6 @@
 /**************************************************************************************** 
 Devi.h: manages all device-handling code
-Version of 13/10/2026
+Version of 18/10/2026 11:50
 Written by Jim Gunther
 ****************************************************************************************/
 #ifndef DEVI_H
@@ -24,12 +24,12 @@ Written by Jim Gunther
 #define PCF8574_ADDR 0x27
 #define PCF8574_BASE 0x80
 #define ANEM_LOOPS 60
-#define RAIN_LOOPS 30
+//#define RAIN_LOOPS 30
 #define VANE_LOOPS 300
 #define DEBNCE_MARGIN 5 // milliseconds
-#define ANEM_PIN 13 // confirmed in hardware 14.10.2026
-#define EMPTY_MARGIN 0.02
-#define RAIN_DEQ_LEN 25
+#define ANEM_PIN 23 // arbitrary
+//#define EMPTY_MARGIN 0.02
+//#define RAIN_DEQ_LEN 25
 #define GUSTPOLL_COUNT 12
 
 class Devi {
@@ -37,18 +37,20 @@ class Devi {
         Devi();
         unsigned int setupDevices(DB dBase);
 		scoreboard getScoreboard();
-        int* getWDCounts(bool bHourly);
+        void getWDCounts(int *nvCounts, bool bHourly); // copies vol -> non-vol
         void resetWDCounts();
-        void anemTasks();
+		bool updateMaxGust();
+        void storeGust();
+		void storeWSpeed();
         void rainTasks();
         void sensTasks();
-        void vaneTasks();
+        void vaneInc();
+		void vaneStore();
 		void resetRainBank();
 
     private:
         int openSerialPort(const char* portName);
 		bool configureSerialPort(int fd, int speed);
-		bool updateMaxGust();
 
         struct termios _oldtio, _newtio;
 		DB _db;
@@ -58,14 +60,13 @@ class Devi {
         //HX711 _hx;
         std::map<std::string, float> _vals;
         unsigned int _deviStatus;
-        int _anemCount;
+        //int _anemCount;
         int _gusts[GUSTPOLL_COUNT];
-        int _ixGust;
-        int _maxGust;
+        volatile int _ixGust;
+        volatile int _maxGust;
         int _prevWSRevs;
         unsigned long _prevAnemMillis;
         unsigned long _prevSensMillis;
-        bool _bHXWorking;
 		scoreboard _scBd;
 		int _currTips, _prevTips;
 		float _rainWeight, _prevRainWeight;
@@ -75,8 +76,8 @@ class Devi {
 		int _rainFD;
         int _vaneCount;
         int _vaneID;
-		int _dirCounts[NUM_CP];
-        int _dirHrCounts[NUM_CP];
+		volatile int _dirCounts[NUM_CP];
+        volatile int _dirHrCounts[NUM_CP];
         int _numCmpPts;
         unsigned long _prevVaneMillis;
 

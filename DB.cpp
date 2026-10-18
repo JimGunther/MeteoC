@@ -249,7 +249,7 @@ bool DB::openConnection() {
     bool DB::addWDRow(int* row, bool bHour) {
         /*addWDRow(): method to add a new row to WDNow table
         parameters:
-            row: array of 17 values
+            row: array of 17 values (non-volatile)
             bHour: True if adding to WDHour table, False if WDNow table
         returns: bool: True if successful, otherwise False
         */

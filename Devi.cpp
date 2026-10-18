@@ -16,7 +16,7 @@
 #include "Sensors.h"
 /*********************************************************************************************************
  * Devi class implementation file
- * Version of 13/10/2026 20:35
+ * Version of 18/10/2026 11:51
  * Written by Jim Gunther
 **********************************************************************************************************/
 volatile int isrRevs;
@@ -33,11 +33,8 @@ void anemISR() {
 
 Devi::Devi() {
     _deviStatus = 0;
-    _anemCount = 1;
-    //_rainCount = 1;
-    //_rainTare = 0.0;
+    //_anemCount = 1;
     _vaneCount = 1;
-    _bHXWorking = false;
 }
 
 // Function to open the serial port
@@ -156,9 +153,12 @@ unsigned int Devi::setupDevices(DB dBase) {
 
 scoreboard Devi::getScoreboard() { return _scBd; }
 
-int* Devi::getWDCounts(bool bHourly) {
-	if (bHourly) return _dirHrCounts;
-    else return _dirCounts;
+void Devi::getWDCounts(int* nvCounts, bool bHourly) { // copies into non-volatile buffer
+	int i;
+	if (bHourly) 
+		for (i = 0; i <= NUM_CP; i++) nvCounts[i] = _dirHrCounts[i];
+    else
+		for (i = 0; i <= NUM_CP; i++) nvCounts[i] = _dirCounts[i];
 }
 
 void Devi::resetWDCounts() {
@@ -167,7 +167,7 @@ void Devi::resetWDCounts() {
 
 // ANEMOMETER "LOOP" METHODS==========================================================================================
 
-bool Devi::updateMaxGust() {
+bool Devi::updateMaxGust() { // called every 250ms
     int revsNow = isrRevs;
     int revsInc = revsNow - _gusts[_ixGust];
     revsInc = std::max(0, revsInc);  // no -ve values!
@@ -181,40 +181,39 @@ bool Devi::updateMaxGust() {
     return (_ixGust == 0);    
 }
 
-void Devi::anemTasks() { // called every 250ms
+void Devi::storeGust() { // called every 3secs (by clockTasks()) : execution time: 4ms
+    //std::cout << "I am doing gusts" << std::endl;
+    float gu, r = _db.getPrefFloat("WSMult");
+    gu = r * _maxGust / 3.0;
+    _db.updateLiveRow("Gu", gu);
+    _vals["Gu"] = gu;
+}
+
+void Devi::storeWSpeed() { // called every 15 secs (by clockTasks()): execution time: 2ms    
     int revsNow, revs15Inc;
     unsigned long millisNow;
     int intvl;
-    bool bDoGust = updateMaxGust();
-    float r, gu, ws;
-    if (bDoGust) { // every 3secs
-        //std::cout << "I am doing gusts" << std::endl;
-        revsNow = isrRevs;
-        revs15Inc = revsNow - _prevWSRevs;
-        r = _db.getPrefFloat("WSMult");
-        gu = r * _maxGust / 3.0;
-        _db.updateLiveRow("Gu", gu);
-        _vals["Gu"] = gu;
-    }
-    
-    if (_anemCount == 0) { // every 15secs
-        std::cout << "<a" << std::flush;
-        millisNow = millis();
-        intvl = millisNow - _prevAnemMillis;
-        if (intvl > 0) ws = r * revs15Inc / intvl;
-        else ws = 0.0;
-        _prevAnemMillis = millisNow;
-        _db.updateLiveRow("Rv", ws);
-        _vals["Rv"] = ws;
-		//unsigned long millisEnd = millis();
-        std::cout << "A>" << std::flush;
-    }
-    _anemCount = (_anemCount + 1) % ANEM_LOOPS;
+    float r, ws;
+    std::cout << "<w" << std::flush;
+    millisNow = millis();
+    revsNow = isrRevs;
+    revs15Inc = revsNow - _prevWSRevs;
+    r = _db.getPrefFloat("WSMult");
+    intvl = millisNow - _prevAnemMillis;
+    if (intvl > 0) ws = r * revs15Inc / intvl;
+    else ws = 0.0;
+    _prevAnemMillis = millisNow;
+    _db.updateLiveRow("Rv", ws);
+    _vals["Rv"] = ws;
+	unsigned long millisEnd = millis();
+    std::cout << (millisEnd - millisNow) << "W>" << std::flush;
+    //_anemCount = (_anemCount + 1) % ANEM_LOOPS;
 }
 
 // RAIN "LOOP" METHODS================================================================================================
 
-void Devi::rainTasks() { // called every second(?)
+void Devi::rainTasks() { // called every 30 seconds(?): execution time: 512-527 ms
+    unsigned long millisNow = millis();
 	std::cout << "<r";
 	int num = read(_rainFD, _rainBuf, sizeof(_rainBuf));
 	if (num > 0) {
@@ -234,6 +233,7 @@ void Devi::rainTasks() { // called every second(?)
 		_prevRainWeight = _rainWeight;
 		_prevTips = _currTips;		
 	}       
+	//unsigned long millisEnd = millis();
     std::cout << "R>";
 }
 
@@ -242,7 +242,7 @@ void Devi::resetRainBank() { _rainBank = 0.0f; }
 
 // SENSOR "LOOP" METHODS===========================================================================================
 
-void Devi::sensTasks() { // called every 30 secs
+void Devi::sensTasks() { // called every 30 secs: execution time ~2003ms (!)
     int intvl;
     unsigned long millisNow = millis();
     intvl = millisNow - _prevSensMillis;
@@ -255,14 +255,12 @@ void Devi::sensTasks() { // called every 30 secs
     _scBd.humdty = vals.humdty;
     _scBd.press = vals.press;
     _scBd.light = lt;
-	unsigned long millisEnd = millis();
-    std::cout << (millisEnd - millisNow) << "S>" << std::flush;
+	std::cout << "S>" << std::flush;
 }
 
 // VANE "LOOP" METHODS==============================================================================================
 
-void Devi::vaneTasks() { // called every 100ms
-
+void Devi::vaneInc() { // called every 100ms: execution time < 1ms
     unsigned int p = wiringPiI2CRead(_vaneID); // ASSUMED TO BE SAME AS RICHARD'S pcf.digitalReadByte(); (Checked with Richard)
     
     int d;
@@ -288,21 +286,21 @@ void Devi::vaneTasks() { // called every 100ms
     // Keep track of both "now" and "hourly" counts
     _dirCounts[d]++;
     _dirHrCounts[d]++;
-    
-    if (_vaneCount == 0) {
-		std::cout << "<v" << std::flush;
-        // Update the database with new counts
-        int intvl;
-        unsigned long millisNow = millis();
-        intvl = millisNow - _prevVaneMillis;
-        _prevVaneMillis = millisNow;
-		// NB : to avoid segmentation error, maybe pass vector by reference??
-		std::cout << "x" << std::flush;
-        _db.updateLiveWD(intvl, _dirCounts);
-		std::cout << "z" << std::flush;
-		std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::cout << "V>" << std::flush;
-    }
-    _vaneCount = (_vaneCount + 1) % VANE_LOOPS;
+}
+
+void Devi::vaneStore() { // called every 30 secs (by clockTasks()): execution time: 2-3ms
+	unsigned long millisNow = millis();
+	std::cout << "<v" << std::flush;
+    // Update the database with new counts
+    int intvl;
+    intvl = millisNow - _prevVaneMillis;
+    _prevVaneMillis = millisNow;
+	//std::cout << "x" << std::flush;
+	int wdCounts[NUM_CP + 1];
+	getWDCounts(wdCounts, false);
+    _db.updateLiveWD(intvl, wdCounts); // volatile -> non-vol!
+	//std::cout << "z" << std::flush;
+	//unsigned long millisEnd = millis();
+    std::cout << "V>" << std::flush;
 }
 

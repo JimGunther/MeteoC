@@ -11,7 +11,7 @@
 #include "DB.h"
 /*************************************************
 MeteoC.cpp: C++ version of code to run Meteo WS
-Version as at 10/10/2026 23:39
+Version as at 18/10/2026 11:53
 Written by Jim Gunther
 *************************************************/
 
@@ -28,19 +28,19 @@ class Tim {
       while (true)
       { 
         auto x = std::chrono::steady_clock::now() + std::chrono::milliseconds(interval);
-        std::this_thread::sleep_until(x);
         func();
-      }
+        std::this_thread::sleep_until(x);
+}
     }).detach();
   };
 };
 
 
 #define ANEM_INTVL 250
-#define RAIN_INTVL 10000 
-#define SENS_INTVL 30000
 #define VANE_INTVL 100
-#define CLOCK_INTVL 30000
+#define CLOCK_INTVL 3000
+#define CLOCK_LOOPS 10
+#define WSPEED_LOOPS 5
 
 Devi dv;
 DB db;
@@ -50,10 +50,9 @@ int nowWDCount;
 int hrCount;
 int clockCount; // TEMP
 
-void anem() { dv.anemTasks(); }
-void rain() { dv.rainTasks(); }
-void sens() { dv.sensTasks(); }
-void vane() { dv.vaneTasks(); }
+// Other threads
+void anem() { dv.updateMaxGust(); }
+void vane() { dv.vaneInc(); }
 
 void saveNowVals() {
     /*saveNowVals(): method to store data from map DB::_vals into 2 data tables: NowValues and WDNow
@@ -68,7 +67,8 @@ void saveNowVals() {
     else db.addMessageEntry(db.error(), true);
      
     // And now, vane values
-    int* wdCounts = dv.getWDCounts(false);
+    int wdCounts[NUM_CP + 1];
+	dv.getWDCounts(wdCounts, false);
     int ctInvalid = wdCounts[NUM_CP];
     ok = db.addWDRow(wdCounts, false);
     if (ok) nowWDCount++;
@@ -87,6 +87,7 @@ bool doHourly(int currHr) {
     parameters: none
     returns: bool: true if hour "ticked by"
     */
+	unsigned long iniTime = millis();
 	int ri = (int)db.getPrefFloat("RptIntvl");
     int expectedCount = int(14400 / ri);
     int diff = expectedCount - nowCount;
@@ -94,7 +95,7 @@ bool doHourly(int currHr) {
         std::string s = "Expected records: " + std::to_string(expectedCount) + "; Actual records: " + std::to_string(nowCount) + " in hour " + std::to_string(currHr);
         db.addMessageEntry(s, false);
     }
-    if (nowCount > 0) { // "Now" records this hour
+    if (nowCount > 0) { // Number of "Now" records this hour
         std::vector<float> hv = db.hourAggregates(); //hv is 3-value vector
         //Construct the rest of the vector from current values
 		scoreboard sb1 = dv.getScoreboard();
@@ -103,17 +104,18 @@ bool doHourly(int currHr) {
         hv.push_back(sb1.press);
         hv.push_back(sb1.light); 
 
-		//std::cout << "doHourly line 114" << std::endl;
         if (db.addHourRow(hv)) std::cout << "Hour saved:" + std::to_string(currHr) << std::endl;
         else std::cout << "Hour failed:" + std::to_string(currHr) << std::endl;
 		//std::cout << "doHourly line 117" << std::endl;
-        if (db.addWDRow(dv.getWDCounts(true), true)) std::cout << "WDHour saved:" + std::to_string(currHr) << std::endl;
+		int wdHrCounts[NUM_CP + 1];
+		dv.getWDCounts(wdHrCounts, true);
+        if (db.addWDRow(wdHrCounts, true)) std::cout << "WDHour saved:" + std::to_string(currHr) << std::endl;
         else std::cout << "WDHour failed:" + std::to_string(currHr) << std::endl;
 		//std::cout << "doHourly line 120" << std::endl;
         
         hrCount += 1;
         nowCount = 0;
-		//std::cout << "Hourly line 122" << std::endl;
+		std::cout << "doHourly:" << (millis() - iniTime) << std::endl;
         return true;
         }
     else {
@@ -188,30 +190,55 @@ bool doDaily() {
     }
 }
 
-void clockTasks() { // Called every 30secs
+void clockTasks() { // Called every "loop": execution time 3s (??)
     time_t  t = std::time(NULL);
     if ((t - setupTime) < 30) return; // Suppress clock tasks for the first 30 seconds
+    auto x = std::chrono::steady_clock::now() + std::chrono::milliseconds(CLOCK_INTVL);
+	
+	unsigned long iniTime = millis();
+	std::cout << "<c";
+	dv.storeGust();
+	//std::cout << (millis() - iniTime) << ",";
+	
+	if ((clockCount % WSPEED_LOOPS) == 0) { // every 5 loops (15 secs)
+		dv.storeWSpeed();
+		std::cout << "WS" << (millis() - iniTime) << ",";
+	}
+	
+	if (clockCount == 0) {
+		dv.rainTasks();
+		//std::cout << (millis() - iniTime) << ",";
+		dv.sensTasks();
+		//std::cout << (millis() - iniTime) << ",";
+		dv.vaneStore();
+		//std::cout << (millis() - iniTime) << ",";
+		saveNowVals();
+		//std::cout << (millis() - iniTime) << ",";
     
-    std::cout << "<c:";
-    dv.sensTasks();
-	saveNowVals();
-    
-    struct tm* tim = std::gmtime(&t);
-    int tSecs = tim->tm_sec;
-    if (tSecs < 30) { // code below runs once a minute
-        int tMin = tim->tm_min;
-        if (tMin == 0) { // code below runs once an hour
-            int tHr = tim->tm_hour;
-            doHourly(tHr);
-            if (tHr == 0){ // midnight
-                doDaily();
-            }
-        }
-    }
-    std::cout << "C>";
-	clockCount = (clockCount + 1) % 5; // TEMP
+		struct tm* tim = std::gmtime(&t);
+		int tSecs = tim->tm_sec;
+		if (tSecs < 30) { // code below runs once a minute
+			int tMin = tim->tm_min;
+			if (tMin == 0) { // code below runs once an hour
+				int tHr = tim->tm_hour;
+				doHourly(tHr);
+				if (tHr == 0){ // midnight
+					doDaily();
+				}
+				std::cout << (millis() - iniTime) << ",";
+			}
+		}
+	}
+	std::cout << (millis() - iniTime) << "C>";
+	
+	clockCount = (clockCount + 1) % CLOCK_LOOPS;
+	
+	if ((millis() - iniTime) > CLOCK_INTVL) {
+		std::cout << "LONG LOOP";
+	}
 	if (clockCount == 0) std::cout << std::endl; // TEMP
 	else std::cout << "*" << std::flush;
+	std::this_thread::sleep_until(x);
 }
 
 int main()
@@ -234,16 +261,10 @@ int main()
         setupTime = std::time(NULL);
         nowCount = 0;
         tAnem.timer_start(anem, ANEM_INTVL);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        tRain.timer_start(rain, RAIN_INTVL);
-        //std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        //tSens.timer_start(sens, SENS_INTVL);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         tVane.timer_start(vane, VANE_INTVL);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        tMaster.timer_start(clockTasks, CLOCK_INTVL);
+        //tMaster.timer_start(clockTasks, CLOCK_INTVL);
         while (true)
-            ;
+            clockTasks();
     }
     return 0;
 }
