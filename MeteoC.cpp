@@ -49,6 +49,7 @@ int nowCount;
 int nowWDCount;
 int hrCount;
 int clockCount; // TEMP
+bool flip = true;
 
 // Other threads
 void anem() { dv.updateMaxGust(); }
@@ -191,54 +192,63 @@ bool doDaily() {
 }
 
 void clockTasks() { // Called every "loop": execution time 3s (??)
-    time_t  t = std::time(NULL);
-    if ((t - setupTime) < 30) return; // Suppress clock tasks for the first 30 seconds
-    auto x = std::chrono::steady_clock::now() + std::chrono::milliseconds(CLOCK_INTVL);
+	int lineNo = 0;
+    try {
+		time_t  t = std::time(NULL);
+		if ((t - setupTime) < 30) return; // Suppress clock tasks for the first 30 seconds
+		auto x = std::chrono::steady_clock::now() + std::chrono::milliseconds(CLOCK_INTVL);
 	
-	unsigned long iniTime = millis();
-	std::cout << "<c";
-	dv.storeGust();
-	//std::cout << (millis() - iniTime) << ",";
+		unsigned long iniTime = millis();
+		std::cout << "c";
+		dv.storeGust();
+		lineNo = 203;
+		//std::cout << (millis() - iniTime) << ",";
 	
-	if ((clockCount % WSPEED_LOOPS) == 0) { // every 5 loops (15 secs)
-		dv.storeWSpeed();
-		std::cout << "WS" << (millis() - iniTime) << ",";
-	}
+		if ((clockCount % WSPEED_LOOPS) == 0) { // every 5 loops (15 secs)
+			dv.storeWSpeed();
+			//std::cout << "WS" << (millis() - iniTime) << ",";
+		}
+		lineNo = 210;
 	
-	if (clockCount == 0) {
-		dv.rainTasks();
-		//std::cout << (millis() - iniTime) << ",";
-		dv.sensTasks();
-		//std::cout << (millis() - iniTime) << ",";
-		dv.vaneStore();
-		//std::cout << (millis() - iniTime) << ",";
-		saveNowVals();
-		//std::cout << (millis() - iniTime) << ",";
+		if (clockCount == 0) {
+			dv.rainTasks();
+			dv.sensTasks();
+			dv.vaneStore();
+			saveNowVals();
+			//std::cout << (millis() - iniTime) << ",";
     
-		struct tm* tim = std::gmtime(&t);
-		int tSecs = tim->tm_sec;
-		if (tSecs < 30) { // code below runs once a minute
-			int tMin = tim->tm_min;
-			if (tMin == 0) { // code below runs once an hour
-				int tHr = tim->tm_hour;
-				doHourly(tHr);
-				if (tHr == 0){ // midnight
-					doDaily();
+			struct tm* tim = std::gmtime(&t);
+			int tSecs = tim->tm_sec;
+			if (tSecs < 30) { // code below runs once a minute
+				int tMin = tim->tm_min;
+				if (tMin == 0) { // code below runs once an hour
+					int tHr = tim->tm_hour;
+					doHourly(tHr);
+					if (tHr == 0){ // midnight
+						doDaily();
+					}
+				//std::cout << (millis() - iniTime) << ",";
 				}
-				std::cout << (millis() - iniTime) << ",";
+			flip = !flip;
 			}
 		}
-	}
-	std::cout << (millis() - iniTime) << "C>";
+		lineNo = 233;
+		std::cout << (millis() - iniTime) << "C";
 	
-	clockCount = (clockCount + 1) % CLOCK_LOOPS;
+		clockCount = (clockCount + 1) % CLOCK_LOOPS;
+		flip = !flip;
 	
-	if ((millis() - iniTime) > CLOCK_INTVL) {
-		std::cout << "LONG LOOP";
+		if ((millis() - iniTime) > CLOCK_INTVL) {
+			std::cout << "LONG LOOP";
+		}
+		if ((clockCount == 0) && flip) std::cout << std::endl; // TEMP
+		else std::cout << "*" << std::flush;
+		std::this_thread::sleep_until(x);
+		lineNo = 244;
 	}
-	if (clockCount == 0) std::cout << std::endl; // TEMP
-	else std::cout << "*" << std::flush;
-	std::this_thread::sleep_until(x);
+	catch (const std::exception& e) {
+		std::cout << "clockTasks() error at line number: " << lineNo << ": " << e.what() << std::endl;
+	}
 }
 
 int main()

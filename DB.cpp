@@ -12,8 +12,8 @@
 /***********************************************************************************************
 * DB.cpp: class handles all SQL and message/error logging interactions                         *
 *                                                                                              *
-* Version: 0.5                                                                                 *
-* Last updated 11/109/2026 07:31                                                                *
+* Version: 0.6                                                                                 *
+* Last updated 20/10/2026 12:48                                                                *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -363,7 +363,7 @@ bool DB::openConnection() {
         auto sDT = dtString("'%Y-%m-%d 00:00:00', ");
         std::string query = "CALL spHourToDay(" + sDT + std::to_string(risefall) + ")";
         std::cout << query << std::endl;
-		addMessageEntry(query, true);
+		addMessageEntry(query, false);
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             std::string s(mysql_error(_myConn));

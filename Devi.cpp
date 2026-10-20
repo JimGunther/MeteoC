@@ -16,7 +16,7 @@
 #include "Sensors.h"
 /*********************************************************************************************************
  * Devi class implementation file
- * Version of 18/10/2026 11:51
+ * Version of 20/10/2026 12:53
  * Written by Jim Gunther
 **********************************************************************************************************/
 volatile int isrRevs;
@@ -182,7 +182,6 @@ bool Devi::updateMaxGust() { // called every 250ms
 }
 
 void Devi::storeGust() { // called every 3secs (by clockTasks()) : execution time: 4ms
-    //std::cout << "I am doing gusts" << std::endl;
     float gu, r = _db.getPrefFloat("WSMult");
     gu = r * _maxGust / 3.0;
     _db.updateLiveRow("Gu", gu);
@@ -194,7 +193,7 @@ void Devi::storeWSpeed() { // called every 15 secs (by clockTasks()): execution 
     unsigned long millisNow;
     int intvl;
     float r, ws;
-    std::cout << "<w" << std::flush;
+    std::cout << "w" << std::flush;
     millisNow = millis();
     revsNow = isrRevs;
     revs15Inc = revsNow - _prevWSRevs;
@@ -205,16 +204,14 @@ void Devi::storeWSpeed() { // called every 15 secs (by clockTasks()): execution 
     _prevAnemMillis = millisNow;
     _db.updateLiveRow("Rv", ws);
     _vals["Rv"] = ws;
-	unsigned long millisEnd = millis();
-    std::cout << (millisEnd - millisNow) << "W>" << std::flush;
-    //_anemCount = (_anemCount + 1) % ANEM_LOOPS;
+    std::cout  << "W" << std::flush;
 }
 
 // RAIN "LOOP" METHODS================================================================================================
 
 void Devi::rainTasks() { // called every 30 seconds(?): execution time: 512-527 ms
-    unsigned long millisNow = millis();
-	std::cout << "<r";
+	unsigned long millisNow = millis();
+	std::cout << "r";
 	int num = read(_rainFD, _rainBuf, sizeof(_rainBuf));
 	if (num > 0) {
 		//Read it!
@@ -227,6 +224,7 @@ void Devi::rainTasks() { // called every 30 seconds(?): execution time: 512-527 
 		}
 		_currTips = stoi(vect[2]);
 		_rainWeight = stof(vect[7]) * _rainRatio + _rainBank;
+		_db.updateLiveRow("Ra", _rainWeight);
 		if (_currTips > _prevTips) {	// bucket has emptied
 			_rainBank += _prevRainWeight;
 		}
@@ -234,7 +232,7 @@ void Devi::rainTasks() { // called every 30 seconds(?): execution time: 512-527 
 		_prevTips = _currTips;		
 	}       
 	//unsigned long millisEnd = millis();
-    std::cout << "R>";
+    std::cout << "R";
 }
 
 void Devi::resetRainBank() { _rainBank = 0.0f; }
@@ -247,7 +245,7 @@ void Devi::sensTasks() { // called every 30 secs: execution time ~2003ms (!)
     unsigned long millisNow = millis();
     intvl = millisNow - _prevSensMillis;
     _prevSensMillis = millisNow;
-    std::cout << "<s" << std::flush;
+    std::cout << "s" << std::flush;
     float lt = 0.5 * ( _lightA.getLux() + _lightB.getLux());
     bme_280_values vals = _bme.getValues();
     // Load scoreboard values
@@ -255,7 +253,11 @@ void Devi::sensTasks() { // called every 30 secs: execution time ~2003ms (!)
     _scBd.humdty = vals.humdty;
     _scBd.press = vals.press;
     _scBd.light = lt;
-	std::cout << "S>" << std::flush;
+   _db.updateLiveRow("Tp", vals.temp);
+    _db.updateLiveRow("Hm", vals.humdty);
+    _db.updateLiveRow("Pr", vals.press);
+    _db.updateLiveRow("Lt", lt);
+ 	std::cout << "S" << std::flush;
 }
 
 // VANE "LOOP" METHODS==============================================================================================
@@ -290,17 +292,14 @@ void Devi::vaneInc() { // called every 100ms: execution time < 1ms
 
 void Devi::vaneStore() { // called every 30 secs (by clockTasks()): execution time: 2-3ms
 	unsigned long millisNow = millis();
-	std::cout << "<v" << std::flush;
+	std::cout << "v" << std::flush;
     // Update the database with new counts
     int intvl;
     intvl = millisNow - _prevVaneMillis;
     _prevVaneMillis = millisNow;
-	//std::cout << "x" << std::flush;
 	int wdCounts[NUM_CP + 1];
 	getWDCounts(wdCounts, false);
     _db.updateLiveWD(intvl, wdCounts); // volatile -> non-vol!
-	//std::cout << "z" << std::flush;
-	//unsigned long millisEnd = millis();
-    std::cout << "V>" << std::flush;
+    std::cout << "V" << std::flush;
 }
 
