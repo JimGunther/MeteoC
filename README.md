@@ -4,4 +4,3 @@ To compile, use:
 g++ MeteoC.cpp DB.cpp Devi.cpp Sensors.cpp -lwiringPi -lmysqlclient -o MeteoC
 Libraries: pcf8574
 The rain had code has been tweaked to allow for corrupted serial port data: if the serial string is missing or fails certain basic sanity checks, no rain update is effected.
-(Note that currently, Jim's dummy rain ESP is either not sending data or the RPi fails to read it. Cause still under investigation.)
