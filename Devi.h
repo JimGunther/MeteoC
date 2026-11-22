@@ -1,6 +1,6 @@
 /**************************************************************************************** 
 Devi.h: manages all device-handling code
-Version of 18/10/2026 11:50
+Version of 21/11/2026 17:06
 Written by Jim Gunther
 ****************************************************************************************/
 #ifndef DEVI_H
@@ -24,12 +24,11 @@ Written by Jim Gunther
 #define PCF8574_ADDR 0x27
 #define PCF8574_BASE 0x80
 #define ANEM_LOOPS 60
-//#define RAIN_LOOPS 30
+#define MIN_SERIAL 20
 #define VANE_LOOPS 300
 #define DEBNCE_MARGIN 5 // milliseconds
 #define ANEM_PIN 23 // arbitrary
-//#define EMPTY_MARGIN 0.02
-//#define RAIN_DEQ_LEN 25
+#define BAUD 9600
 #define GUSTPOLL_COUNT 12
 
 class Devi {
@@ -58,7 +57,7 @@ class Devi {
         BH1750 _lightB;
         BME280 _bme;
         //HX711 _hx;
-        std::map<std::string, float> _vals;
+        //std::map<std::string, float> _vals;
         unsigned int _deviStatus;
         //int _anemCount;
         int _gusts[GUSTPOLL_COUNT];

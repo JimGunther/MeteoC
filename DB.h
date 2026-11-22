@@ -10,8 +10,8 @@
 /***********************************************************************************************
 * DB.h: header file for DB class                                                               *
 *                                                                                              *
-* Version: 0.2                                                                                 *
-* Last updated: 13/10/2026 07:30                                                               *
+* Version: 0.3                                                                                 *
+* Last updated: 14/10/2026 16:50                                                               *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -34,9 +34,6 @@ class DB {
     float getPrefFloat(std::string prefName);
     std::string dtString(std::string fString);
 	bool updateLiveRow(std::string nm, float val);
-    bool updateLiveRain(float itemVal);
-	bool updateLiveWind(float ws, float gu);
-	bool updateLiveSens(float tp, float hm, float pr, float lt);
     bool updateLiveWD(int intvl, int* counts);
     bool addNowRow(scoreboard sb);
     bool addWDRow(int* row, bool bHour);

@@ -11,7 +11,7 @@
 #include "DB.h"
 /*************************************************
 MeteoC.cpp: C++ version of code to run Meteo WS
-Version as at 18/10/2026 11:53
+Version as at 21/11/2026 15:34
 Written by Jim Gunther
 *************************************************/
 
@@ -62,7 +62,7 @@ void saveNowVals() {
     */
     // First, save non-vane values
 	scoreboard sb = dv.getScoreboard();
-    //std::cout << "SNV start" << std::endl;
+	std::cout << "Scoreboard[" << sb.rain << "~" << sb.wspeed << "~" << sb.gust << "~" << sb.temp << "~" << sb.humdty << "~" << sb.press << "~" << sb.light << "]" << std::endl;
     bool ok = db.addNowRow(sb);
     if (ok) nowCount++;
     else db.addMessageEntry(db.error(), true);

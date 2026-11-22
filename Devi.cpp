@@ -16,7 +16,7 @@
 #include "Sensors.h"
 /*********************************************************************************************************
  * Devi class implementation file
- * Version of 20/10/2026 12:53
+ * Version of 22/11/2026 12:18
  * Written by Jim Gunther
 **********************************************************************************************************/
 volatile int isrRevs;
@@ -90,7 +90,7 @@ unsigned int Devi::setupDevices(DB dBase) {
         return false;
     }
     _db = dBase;
-    _vals["Gu"] = _vals["Hm"] = _vals["Lt"] = _vals["Pr"] = _vals["Ra"] = _vals["Rv"] = _vals["Tp"] = 0.0;
+    //_vals["Gu"] = _vals["Hm"] = _vals["Lt"] = _vals["Pr"] = _vals["Ra"] = _vals["Rv"] = _vals["Tp"] = 0.0;
 
     // Anemometer setup__________________________________________________________________________________
     isrRevs = 0;
@@ -109,9 +109,10 @@ unsigned int Devi::setupDevices(DB dBase) {
     // Rain setup_____________________________________________________________________________________
 	_rainRatio = _db.getPrefFloat("RainRatio");
 	_rainBank = 0.0f;
-	_rainFD = openSerialPort("/dev/serial0"); // NAME OF DEVICE UNCERTAIN!!
+	_rainFD = openSerialPort("/dev/ttyAMA0"); // NAME OF DEVICE OK I THINK!
+	//std::cout << "rain FD: " << _rainFD << std::endl;
     bool bOK = (_rainFD >= 0);
-	bOK = bOK && configureSerialPort(_rainFD, 115200);
+	bOK = bOK && configureSerialPort(_rainFD, BAUD);
 	if (bOK) _deviStatus += RAIN_STATUS;
     if (bOK) std::cout << "Rain gauge setup completed." << std::endl;
     else std::cout << "Rain gauge setup bypassed." << std::endl;
@@ -183,9 +184,10 @@ bool Devi::updateMaxGust() { // called every 250ms
 
 void Devi::storeGust() { // called every 3secs (by clockTasks()) : execution time: 4ms
     float gu, r = _db.getPrefFloat("WSMult");
-    gu = r * _maxGust / 3.0;
+    gu = r * _maxGust / 3000.0;
     _db.updateLiveRow("Gu", gu);
-    _vals["Gu"] = gu;
+    //_vals["Gu"] = gu;
+	_scBd.gust = gu;
 }
 
 void Devi::storeWSpeed() { // called every 15 secs (by clockTasks()): execution time: 2ms    
@@ -196,6 +198,7 @@ void Devi::storeWSpeed() { // called every 15 secs (by clockTasks()): execution 
     std::cout << "w" << std::flush;
     millisNow = millis();
     revsNow = isrRevs;
+	//std::cout << "Revs now: " << revsNow << ";";
     revs15Inc = revsNow - _prevWSRevs;
     r = _db.getPrefFloat("WSMult");
     intvl = millisNow - _prevAnemMillis;
@@ -203,7 +206,8 @@ void Devi::storeWSpeed() { // called every 15 secs (by clockTasks()): execution 
     else ws = 0.0;
     _prevAnemMillis = millisNow;
     _db.updateLiveRow("Rv", ws);
-    _vals["Rv"] = ws;
+    //_vals["Rv"] = ws;
+	_scBd.wspeed = ws;
     std::cout  << "W" << std::flush;
 }
 
@@ -213,23 +217,29 @@ void Devi::rainTasks() { // called every 30 seconds(?): execution time: 512-527 
 	unsigned long millisNow = millis();
 	std::cout << "r";
 	int num = read(_rainFD, _rainBuf, sizeof(_rainBuf));
-	if (num > 0) {
+	//std::cout << "Num read: " << num << std::endl;
+	if (num > MIN_SERIAL) {
 		//Read it!
 		std::string s = _rainBuf;
+		//std::cout << "Serial: " << s << "::" << std::flush;
 		std::stringstream ss(s);
 		std::string itm;
 		std::vector<std::string> vect;
 		while (getline(ss, itm, ',')) {
 			vect.push_back(itm);
 		}
-		_currTips = stoi(vect[2]);
-		_rainWeight = stof(vect[7]) * _rainRatio + _rainBank;
-		_db.updateLiveRow("Ra", _rainWeight);
-		if (_currTips > _prevTips) {	// bucket has emptied
-			_rainBank += _prevRainWeight;
+		int vectLen = vect.size();
+		if (vectLen == 8) { // the serial port string has 8 comma separated values
+			_currTips = stoi(vect[2]);
+			_rainWeight = stof(vect[7]) * _rainRatio + _rainBank;
+			_db.updateLiveRow("Ra", _rainWeight);
+			if (_currTips > _prevTips) {	// bucket has emptied
+				_rainBank += _prevRainWeight;
+			}
+			_prevRainWeight = _rainWeight;
+			_scBd.rain = _rainWeight;
+			_prevTips = _currTips;
 		}
-		_prevRainWeight = _rainWeight;
-		_prevTips = _currTips;		
 	}       
 	//unsigned long millisEnd = millis();
     std::cout << "R";
@@ -246,14 +256,15 @@ void Devi::sensTasks() { // called every 30 secs: execution time ~2003ms (!)
     intvl = millisNow - _prevSensMillis;
     _prevSensMillis = millisNow;
     std::cout << "s" << std::flush;
-    float lt = 0.5 * ( _lightA.getLux() + _lightB.getLux());
+    float lt =  0.5 * ( _lightA.getLux() + _lightB.getLux()); //TEMP _lightB is faulty(?)
     bme_280_values vals = _bme.getValues();
+	//std::cout << "Sensor values: t" << vals.temp << " h" << vals.humdty << " p" << vals.press << " l" << lt << std::endl;
     // Load scoreboard values
 	_scBd.temp = vals.temp;
     _scBd.humdty = vals.humdty;
     _scBd.press = vals.press;
     _scBd.light = lt;
-   _db.updateLiveRow("Tp", vals.temp);
+    _db.updateLiveRow("Tp", vals.temp);
     _db.updateLiveRow("Hm", vals.humdty);
     _db.updateLiveRow("Pr", vals.press);
     _db.updateLiveRow("Lt", lt);
@@ -263,8 +274,8 @@ void Devi::sensTasks() { // called every 30 secs: execution time ~2003ms (!)
 // VANE "LOOP" METHODS==============================================================================================
 
 void Devi::vaneInc() { // called every 100ms: execution time < 1ms
-    unsigned int p = wiringPiI2CRead(_vaneID); // ASSUMED TO BE SAME AS RICHARD'S pcf.digitalReadByte(); (Checked with Richard)
-    
+    unsigned int p = wiringPiI2CRead(_vaneID) & 0xff; // ASSUMED TO BE SAME AS RICHARD'S pcf.digitalReadByte(); (Checked with Richard)
+    //std::cout << p << " " << std::flush;
     int d;
     switch( p ) {
       case 1:     d = 0;     break;    //  1

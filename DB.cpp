@@ -12,8 +12,8 @@
 /***********************************************************************************************
 * DB.cpp: class handles all SQL and message/error logging interactions                         *
 *                                                                                              *
-* Version: 0.6                                                                                 *
-* Last updated 20/10/2026 12:48                                                                *
+* Version: 0.7                                                                                 *
+* Last updated 14/11/2026 17:00                                                                *
 * Author: Jim Gunther                                                                          *
 *                                                                                              *
 ***********************************************************************************************/
@@ -116,7 +116,7 @@ bool DB::openConnection() {
         if (!bOK) return false;
         std::string query;
         //auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
-        query = "UPDATE LiveValues SET Val = " + std::to_string(val) + ", LastUpdated = UTC_TIMESTAMP() WHERE ItemName = '" + nm + "'";
+        query = "UPDATE LiveValues SET Val = " + std::to_string(val) + ", LastUpdated = UTC_TIME() WHERE ItemName = '" + nm + "'";
         int status = mysql_query(_myConn, query.c_str());
         if (status != 0) {
             std::string s(mysql_error(_myConn));
@@ -127,69 +127,6 @@ bool DB::openConnection() {
     
 	}
 
-    bool DB::updateLiveRain(float itemVal) {
-        /*updateLiveRow(): method to update one item (rain) in LiveValues table
-        parameters:
-            itemVal: int: new value for item
-        returns: bool: true if successful, otherwise false
-        */
-        bool bOK = openConnection();
-        if (!bOK) return false;
-        std::string query;
-        //auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
-        query = "UPDATE LiveValues SET Val = " + std::to_string(itemVal) + ", LastUpdated = UTC_TIMESTAMP() WHERE ItemName = 'Ra'";
-        int status = mysql_query(_myConn, query.c_str());
-        if (status != 0) {
-            std::string s(mysql_error(_myConn));
-            _errMsg = s;
-        }
-        mysql_close(_myConn);
-        return (status == 0);            
-    }
-	
-    bool DB::updateLiveWind(float ws, float gu) {
-        /*updateLiveWind(): method to update one item (rain) in LiveValues table
-        parameters:
-            ws: float: new value for wind speed
-			gu: float: new value for gust
-        returns: bool: true if successful, otherwise false
-        */
-        bool bOK = openConnection();
-        if (!bOK) return false;
-        std::string query;
-        auto sTime = dtString("'%Y-%m-%d %H:%M:%S'");
-        query = "CALL spLiveWind(" + std::to_string(ws) + ", " + std::to_string(gu) + ")";
-        int status = mysql_query(_myConn, query.c_str());
-        if (status != 0) {
-            std::string s(mysql_error(_myConn));
-            _errMsg = s;
-        }
-        mysql_close(_myConn);
-        return (status == 0);            
-    }
-	
-    bool DB::updateLiveSens(float tp, float hm, float pr, float lt) {
-        /*updateLiveSens(): method to update sensors values in LiveValues table
-        parameters:
-            tp: float: new value for temperature
-			hm: float: new value for humidity
-            pr: float: new value for pressure
-			lt: float: new value for light
-        returns: bool: true if successful, otherwise false
-        */
-        bool bOK = openConnection();
-        if (!bOK) return false;
-        std::string query;
-        query = "CALL spLiveWind(" + std::to_string(tp) + ", " + std::to_string(hm) + ", " + std::to_string(pr) + ", " + std::to_string(lt) + ")";
-        int status = mysql_query(_myConn, query.c_str());
-        if (status != 0) {
-            std::string s(mysql_error(_myConn));
-            _errMsg = s;
-        }
-        mysql_close(_myConn);
-        return (status == 0);            
-    }	
-       
     bool DB::updateLiveWD(int intvl, int* counts) {
         /*updateLiveWD(): method to update all 17 rows in WDLive table
         parameters:
@@ -352,8 +289,7 @@ bool DB::openConnection() {
     }
 
     bool DB::addDayRow(int risefall) {
-        /*
-        addDayRow(): adds a row to the DayValues table
+        /*addDayRow(): adds a row to the DayValues table
         parameters:
             risefall: int: -1, 0, or +1 (fall, steady, rise)
         returns: bool: true if successful, false otherwise
