@@ -13,6 +13,8 @@
 
 // Definitions for BME280
 #define BME280_ADDRESS                0x76
+#define BME280_FORCED				  0b01
+#define BME_NORMAL					  0b11
 
 #define BME280_REGISTER_DIG_T1        0x88
 #define BME280_REGISTER_DIG_T2        0x8A
@@ -140,7 +142,8 @@ class BME280
     float compensateTemperature(int32_t t_fine);
     float compensatePressure(int32_t adc_P, bme280_calib_data *cal, int32_t t_fine);
     float compensateHumidity(int32_t adc_H, bme280_calib_data *cal, int32_t t_fine);
-    void getRawData(int fd, bme280_raw_data *raw);    
+    void getRawData(int fd, bme280_raw_data *raw);
+	//bool setBME280Mode(int fd, uint_8 mode);	
 
 };
 

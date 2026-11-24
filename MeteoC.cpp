@@ -62,7 +62,7 @@ void saveNowVals() {
     */
     // First, save non-vane values
 	scoreboard sb = dv.getScoreboard();
-	std::cout << "Scoreboard[" << sb.rain << "~" << sb.wspeed << "~" << sb.gust << "~" << sb.temp << "~" << sb.humdty << "~" << sb.press << "~" << sb.light << "]" << std::endl;
+	std::cout << "Scoreboard[" << sb.rain << "," << sb.wspeed << "," << sb.gust << "," << sb.temp << "," << sb.humdty << "," << sb.press << "," << sb.light << "]" << std::endl;
     bool ok = db.addNowRow(sb);
     if (ok) nowCount++;
     else db.addMessageEntry(db.error(), true);

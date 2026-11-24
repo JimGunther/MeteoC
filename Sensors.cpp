@@ -66,10 +66,43 @@ bool BME280::begin() {
   readCalibrationData(_fd, &_cal);
 
   wiringPiI2CWriteReg8(fd, 0xf2, 0x01);   // humidity oversampling x 1
-  wiringPiI2CWriteReg8(fd, 0xf4, 0x25);   // pressure and temperature oversampling x 1, mode normal
+  wiringPiI2CWriteReg8(fd, 0xf4, 0x27);   // pressure and temperature oversampling x 1, mode normal : changed from 0x25
   return true;
 }
+/*
+bool BME280::setBME280Mode(int fd, uint_8 mode) {
+	// 1. Point to the ctrl_meas register (0xF4)
+	uint8_t reg = 0xF4;
+	if (write((fd, &reg, 1) != 1) {
+		std::cerr << "Failed to select ctrl_meas register,\n";
+		return false;
+	}
+	
+	// 2. Read the current register value to preserve oversampling bits (7:2)
+	uint8_t currentVal = 0;
+	if (read(fd, &currentVal, 1) != 1) {
+		std::cerr << "Failed to read ctrl_meas register.\n";
+		return false;
+	}
+	
+	// If oversampling is currently 0 (skipped), set default 1x temp & press
+	// Otherwise, the sensor won't actually measure anything when woken up.
+	if ((currentVal & 0xFC) == 0) {
+		currentVal = 0x24;
+	}
+	
+	// Mask out the bottom 2 bits and apply the new mode
+	uint8_t newVal = (currentVal & 0xFC) | static_cast<uint8_t>(mode);
 
+	// 4. Write the register address followed by the new byte
+	uint8_t buffer[2] = {0xF4, newVal};
+	if (write(fd, buffer, 2) != 2) {
+		std::cerr << "Failed to write new mode to ctrl_meas.\n";
+		return false;
+	}
+	return true;
+}
+*/
 bme_280_values BME280::getValues() {
   bme280_raw_data raw;
   bme_280_values vals;
