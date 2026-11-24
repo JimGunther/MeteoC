@@ -1,5 +1,5 @@
-C++ version of Weather Station code as at 17/11/2026: functionality complete (but rain is not fully tested) but code (inclusing hourly/daily) is only tested for stability.
-All except sensors need hardware testbed to fully assess.
+C++ version of Weather Station code as at 24/11/2026: functionality complete (but rain is not fully tested) but code (inclusing hourly/daily) is only tested for stability.
+Sensors code has had small update to correct missing "normal mode" setting for BME280 sensor.
 To compile, use:
 g++ MeteoC.cpp DB.cpp Devi.cpp Sensors.cpp -lwiringPi -lmysqlclient -o MeteoC
 Libraries: pcf8574
